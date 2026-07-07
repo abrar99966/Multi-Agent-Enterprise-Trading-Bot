@@ -52,10 +52,15 @@ The platform is built on a **dual-speed architecture** — a deterministic fast 
 ### Slow-Path Agents (LLM-Powered, Provider-Agnostic)
 | Agent | Status | Function |
 |-------|--------|----------|
-| **News Intelligence** | ✅ Wired | Processes news sentiment with configurable LLM backend |
-| **Macro Analyst** | ✅ Wired | Monitors rates, inflation, GDP for macro regime assessment |
+| **Fundamentals Analyst** | ✅ Wired | Earnings quality, valuation metrics, balance sheet analysis |
+| **Sentiment Analyst** | ✅ Wired | News flow velocity, narrative shifts, contrarian indicators |
+| **Technical Analyst** | ✅ Wired | Price action, support/resistance, momentum divergences |
+| **Macro Analyst** | ✅ Wired | Central bank policy, inflation, yield curves, geopolitics |
 | **Regime Classifier** | ✅ Wired | Fuses statistical + LLM signals into regime labels (trend/chop/stress/crisis) |
 | **Capital Allocator** | ✅ Wired | Contextual bandit (Thompson sampling) for strategy weight allocation |
+| **Agent Governor** | ✅ Wired | Lifecycle management, resource tracking, auto-pause on errors |
+
+> **Analyst personas** are inspired by [TradingAgents](https://github.com/TauricResearch/TradingAgents) multi-agent debate patterns, adapted for bounded parameter output. **Agent governance** draws from [Paperclip](https://github.com/paperclipai/paperclip) orchestration patterns.
 
 > Slow-path LLM provider is fully configurable — supports OpenAI, Anthropic, Gemini, Groq, Ollama, LM Studio, and any OpenAI-compatible endpoint. Switch with `ETB_LLM_PROVIDER` env var — zero code changes.
 
@@ -67,6 +72,7 @@ The platform is built on a **dual-speed architecture** — a deterministic fast 
 |-------|-----------|
 | **Backend API** | Python 3.12+, FastAPI, Uvicorn, SQLAlchemy (async) |
 | **AI/ML** | LightGBM (GBDT), SciPy, NumPy, multi-provider LLM integration |
+| **Data Enrichment** | OpenBB SDK (optional) — 100+ financial data providers for slow-path intelligence |
 | **Frontend** | Next.js 14, React 18, Tailwind CSS |
 | **Database** | SQLite (dev) / PostgreSQL (prod), QuestDB (tick store), hash-chained event journal |
 | **Event Bus** | In-memory journal (Phase 0) → Redpanda adapter ready |
@@ -129,16 +135,19 @@ The platform is built on a **dual-speed architecture** — a deterministic fast 
 │       │   ├── limits.py       # Hard limits engine
 │       │   ├── tiers.py        # Dynamic autonomy tiers
 │       │   └── approver.py     # Multi-tier approval workflow
-│       ├── services/           # Business logic (18 modules)
+│       ├── services/           # Business logic (19 modules)
 │       │   ├── broker_adapters.py    # 8 broker adapters (3 real, 5 sandbox)
 │       │   ├── broker_service.py     # Fernet-encrypted credential CRUD
 │       │   ├── trade_service.py      # Recommendation lifecycle
 │       │   ├── execution_router.py   # Broker selection for execution
 │       │   ├── market_data.py        # Routed market data service
+│       │   ├── openbb_adapter.py     # OpenBB SDK data enrichment (optional)
 │       │   ├── outcome_tracker.py    # Signal grading vs actual market moves
 │       │   └── risk_limits.py        # Pre-trade gates, kill switch
 │       ├── slowpath/           # LLM-powered intelligence
-│       │   ├── analyst.py      # LLM analyst agent
+│       │   ├── analyst.py      # LLM analyst agent (base)
+│       │   ├── personas.py     # 4 specialist analysts (Fundamentals/Sentiment/Technical/Macro)
+│       │   ├── governance.py   # Agent lifecycle governor (register/pause/resume/terminate)
 │       │   ├── providers.py    # 12+ LLM provider adapters
 │       │   ├── regime.py       # Regime classification
 │       │   └── params.py       # Bounded parameter proposals
@@ -168,7 +177,7 @@ The platform is built on a **dual-speed architecture** — a deterministic fast 
 │   ├── backtest_report.py      # Performance report generator
 │   ├── train_model.py          # Model training script
 │   └── verify_audit_chain.py   # Audit chain integrity checker
-├── tests/                      # Comprehensive test suite (30+ test files)
+├── tests/                      # Comprehensive test suite (261 tests, 32 files)
 ├── infra/                      # Infrastructure
 │   ├── docker-compose.yml      # Full stack (Postgres, Redpanda, QuestDB)
 │   └── .env.example            # Environment variable template

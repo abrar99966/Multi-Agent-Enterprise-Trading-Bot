@@ -164,7 +164,7 @@ All trading hosts must use PTP-disciplined clocks:
 ┌─────────────┐     ┌──────────────┐     ┌────────────┐     ┌──────────┐
 │  PR Created  │ ──→ │  Lint + Test  │ ──→ │   Build    │ ──→ │  Deploy  │
 └─────────────┘     └──────────────┘     └────────────┘     └──────────┘
-                     • pytest (30+ tests)   • Docker images    • Paper env first
+                     • pytest (261 tests)  • Docker images    • Paper env first
                      • flake8/ruff          • Push to ECR      • Prod via GitOps
                      • Security scan        • Sign artifacts   • Risk gateway
                      • Audit chain verify                        separately
@@ -238,3 +238,13 @@ ETB_LLM_PROVIDER=openai
 ETB_LLM_MODEL=gpt-4o-mini
 ETB_LLM_API_KEY=<your-key>
 ```
+
+### Optional: Data Enrichment (OpenBB)
+
+The OpenBB data adapter is optional — the system degrades gracefully without it. To enable enhanced slow-path analyst context:
+
+```bash
+pip install openbb openbb-yfinance openbb-fmp
+```
+
+No env vars are needed. If the SDK is importable, the adapter automatically enriches analyst context with company profiles, fundamentals, macro indicators, and news. If not installed, all enrichment methods return empty data structures.

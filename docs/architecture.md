@@ -42,10 +42,14 @@ graph TB
     JRN -.-> RP
 
     subgraph SLOW["Slow Path — Intelligence Plane"]
-        LLM["LLM Analysts<br/>12+ providers supported<br/>News · Macro · Earnings"]
+        OPENBB["OpenBB Adapter<br/>100+ data providers<br/>equities · macro · news"]
+        LLM["Specialist Analysts<br/>Fundamentals · Sentiment<br/>Technical · Macro"]
+        GOV["Agent Governor<br/>lifecycle · budgets<br/>rate limits · auto-pause"]
         REG["Regime Classifier<br/>trend · chop · stress · crisis"]
         ALLOC["Capital Allocator<br/>Contextual Bandit<br/>Thompson Sampling"]
+        OPENBB --> LLM
         LLM --> REG --> ALLOC
+        GOV -.governs.-> LLM
     end
     JRN --> SLOW
     SLOW -->|"ParameterChangeProposal<br/>bounded · rate-limited · audited"| RG
@@ -110,8 +114,15 @@ Security boundary and trade execution:
 
 ### 5. Intelligence Plane (Slow Path)
 
-LLM-powered strategic adaptation:
+LLM-powered strategic adaptation with multi-source data enrichment:
 
+- **OpenBB Data Adapter:** Optional integration with the [OpenBB SDK](https://openbb.co) for enriched analyst context — equity fundamentals, company profiles, FRED macro indicators, world/company news from 100+ data providers. Graceful degradation if not installed.
+- **Specialist Analyst Personas:** 4 domain-specific LLM analysts inspired by [TradingAgents](https://github.com/TauricResearch/TradingAgents) debate patterns:
+  - **FundamentalsAnalyst** — earnings, valuation, balance sheet health
+  - **SentimentAnalyst** — news flow velocity, narrative shifts, contrarian signals
+  - **TechnicalAnalyst** — price action, support/resistance, momentum divergences
+  - **MacroAnalyst** — central bank policy, inflation, yield curves, geopolitics
+- **Agent Governor:** [Paperclip](https://github.com/paperclipai/paperclip)-inspired lifecycle management — register/pause/resume/terminate agents, per-agent token budget tracking, rate limiting, and automatic pause on error threshold breach.
 - **Provider-Agnostic:** 12+ LLM backends (OpenAI, Anthropic, Gemini, Groq, Ollama, etc.)
 - **Bounded Output:** Only `ParameterChangeProposal` events — regime labels, strategy weights, risk-limit tightening
 - **Direction Asymmetry:** Tightening auto-applies; loosening requires human approval
