@@ -1,4 +1,4 @@
-<![CDATA[# Multi-Agent Enterprise Trading Bot
+# Multi-Agent Enterprise Trading Bot
 
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -402,4 +402,3 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 **Abrar Ahmed** — [@abrar99966](https://github.com/abrar99966)
 
 Project Link: [https://github.com/abrar99966/Multi-Agent-Enterprise-Trading-Bot](https://github.com/abrar99966/Multi-Agent-Enterprise-Trading-Bot)
-]]>
