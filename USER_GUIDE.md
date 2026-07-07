@@ -1,12 +1,12 @@
-# Helios Capital — User Guide
+# Multi-Agent Enterprise Trading Bot — User Guide
 
-A practical, page-by-page guide to every feature in the app: what it does, how
-to use it, what's real, what's stub, and how to take it from "fun toy" to
-"genuinely useful trading tool."
+A practical, page-by-page guide to every feature in the platform: what it does,
+how to use it, and how the dual-speed architecture (deterministic fast path +
+LLM-powered slow path) works together in practice.
 
-> **Honesty notice**: this doc tells you exactly what's wired vs. what's a
-> placeholder. Where something is mock/sandbox/stubbed, it's labelled. No
-> oversold features. If you're considering live trading, read the
+> **Honesty notice**: this doc tells you exactly what's production-ready vs.
+> what's still in research. Where something is sandbox/research-only, it's
+> labelled. No oversold features. If you're considering live trading, read the
 > [Pre-live readiness](#pre-live-readiness-the-checklist-that-matters) section
 > before you do anything else.
 
@@ -50,34 +50,39 @@ to use it, what's real, what's stub, and how to take it from "fun toy" to
 
 ## What this app is
 
-An AI-assisted trading **dashboard, recommendation engine, and disciplined
-execution system** for Indian (NSE/BSE) and international equity markets. It:
+An institutional-grade, multi-agent AI trading **platform** for Indian (NSE/BSE)
+and international equity markets. Built on a dual-speed architecture:
 
-- Connects to your real broker accounts (Dhan, Upstox, Zerodha — all live SDKs)
-- Streams real-time market data from whichever broker you connect, with
-  Yahoo Finance fallback (15-min delayed)
-- Runs a four-agent ensemble (Technical, News, Macro, Risk) to produce trade
-  recommendations with explainable reasoning
-- Requires **explicit human approval** before any order is sent to a broker —
-  no auto-execution
+- **Fast Path (Deterministic):** LightGBM GBDT inference → Risk Gateway → Smart
+  Order Router — no LLM in the order path, fully explainable
+- **Slow Path (Intelligence):** LLM analysts (12+ providers) → Regime Classifier
+  → Capital Allocator — bounded parameter proposals only
+- Connects to real broker accounts (Dhan, Upstox, Zerodha — all live SDKs) +
+  IBKR adapter built for global markets
+- Streams real-time market data from broker APIs with Yahoo Finance fallback
+- Runs a multi-agent ensemble (Technical, News, Macro, Risk, Regime, Capital
+  Allocator) with explainable reasoning
+- **Dynamic autonomy tiers** — Tier 1 (auto), Tier 2 (timeout-approval),
+  Tier 3 (human approval required)
 - **Grades every recommendation** against the actual market move so you know
   the *real* hit rate, not just backtest fantasy
 - **Enforces hard pre-trade risk limits** (per-trade cap, daily loss cap,
-  trade-count cap, master kill switch) — blocks live orders at the service
+  trade-count cap, 4-level kill switch) — blocks live orders at the service
   layer, not the UI
-- Lets you train (tune) the Technical agent against historical data so the
-  live signals improve over time, with universe presets up to 66 symbols
-- Tracks every order with Paper-mode / Live-mode separation so you can dry-run
-  without risking real money
+- **Strategy tournament** with 55 parameter combinations across 6 strategies,
+  walk-forward backtested with purged CV
+- **Smart Order Router** with IS/VWAP/POV/Adaptive execution algorithms
+- **Transaction Cost Analysis** with implementation shortfall decomposition
+- **Hash-chained event journal** for replay-deterministic audit trail
+- Tracks every order with Paper-mode / Live-mode separation
 
-**Not yet wired** (honest list):
-- News agent is stubbed (returns one fake headline per symbol)
-- Macro agent is stubbed (returns hardcoded "stable interest rates" commentary)
-- No XGBoost / LSTM / RL models — Phase 1 of training is rule-based grid tune
+**Still in research** (honest list):
+- Offline RL execution agent (shadow mode only — not used for live decisions)
 - No WebSocket tick streaming — REST polling at 20–60s intervals
 - No options-chain support, no F&O strategies
-- No portfolio P&L attribution / advanced position sizing
-- Order status doesn't auto-poll back (placed orders show `PLACED` until you manually refresh broker side)
+- Order status doesn't auto-poll back from broker (manual refresh needed)
+- Surveillance detectors (wash/spoof/layering) are implemented but not
+  yet connected to an alerting pipeline
 
 ---
 
@@ -1088,24 +1093,23 @@ avoids React re-renders on unchanged polls.
 
 1. **WebSocket tick streaming** — replace REST polling with broker WS bridges
    (Dhan/Upstox/Zerodha all support it). Sub-second updates.
-2. **XGBoost classifier (Training Phase 2)** — engineered features
-   (multi-horizon returns, MACD, ATR, volume profile), walk-forward
-   validated, output is a probability used as a confidence multiplier in the
-   live agent.
-3. **Real News + Macro agents** — Finnhub for news, FRED + RBI for macro.
-4. **Order status polling** — broker fill status pulled back so orders move
+2. **Rust fast-path migration** — rewrite the hot loop (feed → feature →
+   inference → risk gate → order) in Rust with Aeron transport for
+   sub-microsecond latency. The Python stack becomes the control plane.
+3. **Order status polling** — broker fill status pulled back so orders move
    from `PLACED` to `COMPLETE` automatically.
-5. **Automatic stop-loss / take-profit follow-ups** — after entry fills,
+4. **Automatic stop-loss / take-profit follow-ups** — after entry fills,
    place SL and target orders automatically.
-6. **Multi-currency P&L aggregation** — currently INR-only; needs FX rates
-   when Alpaca (USD) is wired.
-7. **Walk-forward backtest validation** — honest out-of-sample numbers
-   instead of full-window train+test.
-8. **Auto-retrain on rolling window** — weekly cron that re-tunes params.
-9. **Notification system** — Slack/Telegram alerts on signals, fills,
+5. **Multi-currency P&L aggregation** — currently INR-only; needs FX rates
+   when global brokers are fully wired.
+6. **Surveillance alerting pipeline** — connect the existing wash/spoof/layering
+   detectors to Slack/PagerDuty for real-time compliance alerts.
+7. **Notification system** — Slack/Telegram alerts on signals, fills,
    kill-switch events.
-
-Any of these can be next. Say the word.
+8. **RL execution agent promotion** — move the offline RL agent from shadow
+   mode to canary with live fill comparison.
+9. **Redpanda cluster deployment** — move from in-memory journal to durable
+   Redpanda cluster for multi-node replay and audit.
 
 ---
 
