@@ -1,0 +1,150 @@
+# Local development infrastructure for the enterprise trading platform.
+#
+# Phase 0 (docs/TARGET_ARCHITECTURE.md, section 16): everything in this file
+# is OPTIONAL. The Python backend runs in journal-only mode (in-process bus +
+# hash-chained JSONL journal + SQLite bar store) with no containers at all.
+# See infra/README.md for quickstart, the ports table, and teardown.
+#
+# Conventions:
+# - images pinned (never :latest),
+# - every service has a healthcheck and a named volume,
+# - single shared bridge network 'etb',
+# - host ports collide nowhere (ClickHouse native moved to 19000 because
+#   QuestDB owns host 9000).
+
+name: etb
+
+services:
+  # Durable, replayable system-of-record event bus (Kafka API).
+  # Single node, dev mode -- not a production tuning.
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
+    container_name: etb-redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      # Single listener advertised as localhost: in Phase 0 the only clients
+      # are host-side Python processes (ETB_REDPANDA_BROKERS=localhost:9092).
+      # Schema registry / pandaproxy stay unpublished (unused in Phase 0).
+      - --kafka-addr=0.0.0.0:9092
+      - --advertise-kafka-addr=localhost:9092
+    ports:
+      - "9092:9092" # Kafka API
+      - "9644:9644" # Admin API + Prometheus metrics
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    networks:
+      - etb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Tick/bar time-series store (target of the market_data.db SQLite port).
+  questdb:
+    image: questdb/questdb:8.2.1
+    container_name: etb-questdb
+    ports:
+      - "9000:9000" # HTTP console + REST /exec
+      - "9009:9009" # ILP ingest (ETB_QUESTDB_ILP_HOST -> this)
+      - "8812:8812" # PGWire SQL
+    volumes:
+      - questdb-data:/var/lib/questdb
+    networks:
+      - etb
+    restart: unless-stopped
+    healthcheck:
+      # Tool availability differs across QuestDB image builds: try curl,
+      # then wget, then a plain bash TCP connect to the HTTP console port.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000 >/dev/null || wget -q --spider http://127.0.0.1:9000 || bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Columnar analytics over event history (TCA / audit queries).
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: etb-clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "19000:9000" # native TCP, remapped on the host (QuestDB owns 9000)
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    networks:
+      - etb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # OMS / positions / reference data (transactional store).
+  postgres:
+    image: postgres:16
+    container_name: etb-postgres
+    environment:
+      # Values come from infra/.env (copy infra/.env.example); the defaults
+      # below keep `docker compose config` and first boot working without it.
+      POSTGRES_USER: ${POSTGRES_USER:-etb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-etb_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-etb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - etb
+    restart: unless-stopped
+    healthcheck:
+      # $$ defers expansion to the container shell (container env, not compose).
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Control-plane hot state / session cache (dashboard, API).
+  redis:
+    image: redis:7
+    container_name: etb-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - etb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  etb:
+    name: etb
+    driver: bridge
+
+volumes:
+  redpanda-data:
+  questdb-data:
+  clickhouse-data:
+  postgres-data:
+  redis-data:

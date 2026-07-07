@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+.env
+*.db
+chroma_db/
+frontend/node_modules/
+.next/
+dist/
+build/
+
+# Logs
+*.log
+*.err.log
+*.out.log
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+.pytest_cache/
+.claude/
+
+# Data files
+ghostclick-log.csv

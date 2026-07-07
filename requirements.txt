@@ -1,0 +1,33 @@
+# Phase 0 runtime (see docs/TARGET_ARCHITECTURE.md §16)
+pydantic>=2.7
+pydantic-settings>=2.2
+httpx>=0.27
+numpy>=2.0
+
+# API layer (existing FastAPI surface, kept)
+fastapi>=0.110
+uvicorn>=0.27
+python-dotenv>=1.0
+
+# Fast-path model (Phase 1): deterministic GBDT decisions + SHAP attributions
+lightgbm>=4.6
+scipy>=1.13
+
+# Dev / test
+pytest>=8.0
+
+# Optional adapters — install when the corresponding infra is enabled
+# confluent-kafka>=2.3   # Redpanda durable bus adapter (bus/redpanda.py)
+# questdb>=2.0           # QuestDB ILP bar store (marketdata/questdb.py)
+
+# Slow-path LLM analyst (Phase 3) is provider-agnostic (slowpath/providers.py):
+# - OpenAI-compatible providers (OpenAI, Groq, Together, OpenRouter, Gemini,
+#   Ollama, LM Studio, vLLM, Mistral, DeepSeek, xAI) use httpx (already above)
+#   — NO extra dependency. Select via ETB_LLM_PROVIDER / ETB_LLM_MODEL.
+# - The native Anthropic provider needs the SDK only if you choose it:
+# anthropic>=0.40        # only for ETB_LLM_PROVIDER=anthropic
+
+# Removed by target-architecture decision (docs/TARGET_ARCHITECTURE.md §2):
+# chromadb  -> replaced by Qdrant/pgvector in the slow path (Phase 3)
+# langchain -> LLM agents are slow-path only, direct SDK calls (Phase 3)
+# sqlalchemy/asyncpg -> reintroduced with the OMS Postgres work (Phase 2+)

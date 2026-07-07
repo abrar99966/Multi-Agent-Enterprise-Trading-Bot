@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Trading Assistant</title>
+<style>
+  :root {
+    --bg:#0b0e14; --surface:#11151d; --panel:#151a24; --line:#222a38;
+    --text:#e8ecf3; --muted:#8b96a8; --faint:#5b6678;
+    --accent:#5b8cff; --accent-soft:rgba(91,140,255,.12);
+    --green:#2ecc8f; --green-soft:rgba(46,204,143,.12);
+    --red:#ff5d5d; --red-soft:rgba(255,93,93,.12);
+    --amber:#ffb454; --amber-soft:rgba(255,180,84,.14);
+    --radius:12px; --radius-sm:8px;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--text); height:100vh; display:flex; overflow:hidden;
+         font:14px/1.5 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
+  aside { width:230px; min-width:230px; background:var(--surface); border-right:1px solid var(--line);
+          display:flex; flex-direction:column; padding:18px 12px; }
+  .logo { display:flex; align-items:center; gap:10px; padding:4px 10px 18px; }
+  .logo .mark { width:34px; height:34px; border-radius:9px; display:grid; place-items:center;
+                background:linear-gradient(135deg,#5b8cff,#7f5bff); font-weight:700; color:#fff; }
+  .logo .name { font-weight:650; } .logo .sub { font-size:11px; color:var(--muted); }
+  nav { display:flex; flex-direction:column; gap:2px; }
+  nav .group { font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--faint);
+               padding:14px 12px 5px; }
+  nav button { display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:none;
+               border:0; color:var(--muted); padding:9px 12px; font:inherit; border-radius:var(--radius-sm); cursor:pointer; }
+  nav button:hover { background:var(--panel); color:var(--text); }
+  nav button.active { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  nav .ico { width:18px; text-align:center; }
+  .side-foot { margin-top:auto; padding:10px 8px 0; }
+  .sys { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:7px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--green); }
+  .dot.bad { background:var(--red); }
+  main { flex:1; overflow-y:auto; padding:26px 32px 70px; }
+  .page-head { display:flex; align-items:flex-start; gap:16px; margin-bottom:20px; }
+  .page-head h1 { font-size:20px; font-weight:650; }
+  .page-head p { color:var(--muted); font-size:13px; margin-top:3px; max-width:680px; }
+  .actions { margin-left:auto; display:flex; gap:8px; }
+  .btn { background:var(--panel); color:var(--text); border:1px solid var(--line); padding:8px 14px;
+         border-radius:var(--radius-sm); font:inherit; font-size:13px; cursor:pointer;
+         display:inline-flex; align-items:center; gap:7px; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .btn.primary:hover { filter:brightness(1.1); color:#fff; }
+  .btn.go { background:var(--green); border-color:var(--green); color:#06281c; font-weight:650; }
+  .btn.danger:hover { border-color:var(--red); color:var(--red); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; }
+  .stat .v { font-size:22px; font-weight:650; font-variant-numeric:tabular-nums; }
+  .stat .k { font-size:12px; color:var(--muted); margin-top:2px; }
+  .stat .hint { font-size:11px; color:var(--faint); margin-top:6px; line-height:1.4; }
+  .section { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+             padding:18px 20px; margin-bottom:18px; }
+  .section h2 { font-size:14px; font-weight:650; }
+  .section .sub { font-size:12px; color:var(--muted); margin:2px 0 14px; max-width:720px; }
+  table { border-collapse:collapse; width:100%; font-variant-numeric:tabular-nums; font-size:13px; }
+  th { text-align:left; color:var(--faint); font-weight:600; font-size:11px; text-transform:uppercase;
+       letter-spacing:.5px; padding:7px 10px; border-bottom:1px solid var(--line); }
+  td { padding:7px 10px; border-bottom:1px solid rgba(34,42,56,.5); }
+  tr:hover td { background:rgba(91,140,255,.04); }
+  .pos { color:var(--green); } .neg { color:var(--red); } .warn { color:var(--amber); }
+  .badge { display:inline-block; padding:2px 9px; border-radius:99px; font-size:11px; font-weight:600; }
+  .badge.green { background:var(--green-soft); color:var(--green); }
+  .badge.red { background:var(--red-soft); color:var(--red); }
+  .badge.amber { background:var(--amber-soft); color:var(--amber); }
+  .badge.blue { background:var(--accent-soft); color:var(--accent); }
+  canvas { width:100%; }
+  /* recommendation cards (old-UI style) */
+  .rec-card { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+              padding:18px 20px; margin-bottom:12px; display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  .rec-card .body { flex:1; min-width:280px; }
+  .rec-card .head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .rec-card .sym { font-size:17px; font-weight:700; }
+  .rec-card .why { color:var(--muted); font-size:13px; margin-bottom:10px; max-width:640px; }
+  .rec-card .levels { display:flex; gap:22px; font-size:13px; }
+  .rec-card .levels span { color:var(--faint); }
+  .rec-card .acts { display:flex; gap:9px; flex-direction:column; align-items:stretch; }
+  /* verdict */
+  .verdict { border-left:4px solid var(--accent); }
+  .verdict .headline { font-size:17px; font-weight:650; line-height:1.5; margin-bottom:6px; }
+  .verdict .sub2 { color:var(--muted); font-size:13px; }
+  .empty { text-align:center; padding:42px 20px; color:var(--muted); }
+  .empty .big { font-size:30px; margin-bottom:10px; }
+  .empty p { margin-bottom:14px; }
+  #toasts { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:50; }
+  .toast { background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--accent);
+           padding:11px 16px; border-radius:var(--radius-sm); font-size:13px; max-width:360px;
+           box-shadow:0 8px 24px rgba(0,0,0,.4); }
+  .toast.ok { border-left-color:var(--green); } .toast.err { border-left-color:var(--red); }
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin:8px 0 16px; }
+  .form-grid label { font-size:11px; color:var(--muted); display:block; margin-bottom:5px; }
+  select, input[type=text], input[type=number] { width:100%; background:var(--surface); color:var(--text);
+    border:1px solid var(--line); border-radius:var(--radius-sm); padding:8px 10px; font:inherit; }
+  select:focus, input:focus { outline:none; border-color:var(--accent); }
+  .seg { display:flex; border:1px solid var(--line); border-radius:var(--radius-sm); overflow:hidden; }
+  .seg button { flex:1; background:var(--surface); border:0; color:var(--muted); padding:8px 0; font:inherit; cursor:pointer; }
+  .seg button.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  pre { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm);
+        padding:12px; overflow:auto; max-height:300px; font-size:12px; }
+  .picker { display:flex; align-items:center; gap:10px; margin-bottom:16px; font-size:13px; color:var(--muted); }
+  .picker select { width:auto; min-width:220px; }
+  @media (max-width:860px){ aside{display:none;} main{padding:16px;} }
+</style>
+</head>
+<body>
+<aside>
+  <div class="logo">
+    <div class="mark">A</div>
+    <div><div class="name">AI Trading Assistant</div><div class="sub">your market copilot</div></div>
+  </div>
+  <nav id="nav"></nav>
+  <div class="side-foot">
+    <div id="applinks"></div>
+    <div class="sys" style="margin-top:10px"><span class="dot" id="sysdot"></span><span id="systext">connecting…</span></div>
+  </div>
+</aside>
+<main id="main"></main>
+<div id="toasts"></div>
+
+<script>
+/* ============================== shell ============================== */
+const NAV = [
+  {group:"For you", pages:[
+    ["Today","◉","What the market is doing and which trades are waiting for your decision."],
+    ["Check a Strategy","✓","Before you trust a recommendation, see how the same strategy would have done on real past data."],
+    ["Brokers","🔌","Connect and manage your broker accounts. Orders can only execute through a connected account."],
+  ]},
+  {group:"Advanced", pages:[
+    ["Risk","🛡","Every order passes a safety gate before it can exist. See what was approved, blocked, and why."],
+    ["AI & Model","✦","Which model made each decision, its confidence, and the signals that drove it."],
+    ["Costs","₹","What each trade really cost beyond the price — slippage, fees, delay."],
+    ["Replay","⟲","Re-run a past check and prove the result reproduces exactly. Trust, verified."],
+    ["System","▦","Data freshness and event-log health (tamper-evident hash chain)."],
+  ]},
+];
+const PAGES = NAV.flatMap(g => g.pages);
+let page = "Today", journal = null, checkPrefill = null;
+
+const api = async (p, opts) => {
+  const r = await fetch("/api/v1" + p, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || (p + " → " + r.status));
+  return data;
+};
+const el = (h) => { const d = document.createElement("div"); d.innerHTML = h; return d; };
+const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const inr = (x, d=2) => x == null ? "—" : Number(x).toLocaleString("en-IN",{maximumFractionDigits:d});
+const money = (x) => x == null ? "—" : (x < 0 ? "−₹" : "₹") + inr(Math.abs(x));
+const cls = (x) => x > 0 ? "pos" : x < 0 ? "neg" : "";
+const when = (ns) => new Date(ns/1e6).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"});
+const toast = (msg, kind="") => {
+  const t = el(`<div class="toast ${kind}">${msg}</div>`).firstChild;
+  document.getElementById("toasts").append(t); setTimeout(() => t.remove(), 7000);
+};
+const stat = (k,v,hint,c="") => `<div class="stat"><div class="v ${c}">${v}</div><div class="k">${k}</div><div class="hint">${hint}</div></div>`;
+const section = (t,s,b) => `<div class="section"><h2>${t}</h2><div class="sub">${s}</div>${b}</div>`;
+const table = (heads, rows, emptyMsg) => rows.length
+  ? `<table><tr>${heads.map(h=>`<th>${h}</th>`).join("")}</tr>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}</table>`
+  : `<div class="empty"><p>${emptyMsg || "Nothing here yet."}</p></div>`;
+
+function renderNav() {
+  document.getElementById("nav").innerHTML = NAV.map(g =>
+    `<div class="group">${g.group}</div>` + g.pages.map(([name,ico]) =>
+      `<button class="${name===page?'active':''}" onclick="go('${name}')"><span class="ico">${ico}</span>${name}</button>`).join("")
+  ).join("");
+}
+
+let appLinks = null, appLinksTs = 0;
+async function renderAppLinks() {
+  // Companion apps (classic Part-1 UI etc.) — probed server-side, re-probed
+  // every 30s so starting the classic app flips the badge without a reload.
+  if (!appLinks || Date.now() - appLinksTs > 30_000) {
+    try { appLinks = await api("/dash/links"); appLinksTs = Date.now(); } catch { /* keep last */ }
+  }
+  const box = document.getElementById("applinks");
+  if (!box || !appLinks) return;
+  const c = appLinks.classic_app;
+  const linkStyle = "display:flex;align-items:center;gap:9px;padding:7px 12px;border-radius:8px;" +
+                    "color:var(--muted);text-decoration:none;font-size:13px";
+  const hover = `onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'"`;
+  // Links are ALWAYS clickable — "offline" is information, not a lock. If the
+  // classic app runs at a different address, set ETB_LEGACY_UI_URL in .env.
+  const offBadge = c.reachable ? "" : ` <span class="badge amber" style="margin-left:auto">offline</span>`;
+  const offTitle = c.reachable ? "" :
+    ` title="Nothing answered at ${c.url}. If your classic app runs at a different address, edit ETB_LEGACY_UI_URL in .env and restart. Clicking still opens the address."`;
+  box.innerHTML = `<div class="group" style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);padding:8px 12px 5px">Companion apps</div>
+    <a href="${c.url}" target="_blank" style="${linkStyle}" ${hover}${offTitle}><span style="width:18px;text-align:center">⌂</span>Classic app ↗${offBadge}</a>
+    <a href="${c.brokers_url}" target="_blank" style="${linkStyle}" ${hover}${offTitle}><span style="width:18px;text-align:center">🔌</span>Classic broker page ↗${offBadge}</a>
+    <a href="${appLinks.api_docs}" target="_blank" style="${linkStyle}" ${hover}><span style="width:18px;text-align:center">⚙</span>API explorer ↗</a>`;
+}
+function go(p, prefill=null) { page = p; checkPrefill = prefill; render(); }
+
+async function listJournals() {
+  const data = await api("/dash/journals");
+  if (!journal || !data.journals.some(j => j.name === journal))
+    journal = data.journals.length ? data.journals[data.journals.length-1].name : null;
+  return data.journals;
+}
+function journalPicker(journals, label="Showing test result") {
+  return `<div class="picker">${label}:
+    <select onchange="journal=this.value;render()">
+      ${journals.map(j=>`<option value="${j.name}" ${j.name===journal?"selected":""}>${j.name.replace(".jsonl","")} · ${j.records} events${j.chain_ok?"":" ⚠"}</option>`).join("")}
+    </select></div>`;
+}
+
+/* ============================== chart ============================== */
+function equityChart(curve, height=200) {
+  const wrap = document.createElement("div");
+  const c = document.createElement("canvas"); wrap.append(c);
+  const W = Math.min(1100, document.getElementById("main").clientWidth - 80) || 900;
+  c.width = W*devicePixelRatio; c.height = height*devicePixelRatio;
+  c.style.width = W+"px"; c.style.height = height+"px";
+  const g = c.getContext("2d"); g.scale(devicePixelRatio, devicePixelRatio);
+  if (!curve.length) return wrap;
+  const xs = curve.map(p=>p.ts), ys = curve.map(p=>p.realized_pnl);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = Math.min(0,...ys), y1 = Math.max(0,...ys);
+  const pad = (y1-y0)*0.12 || 1; y0 -= pad; y1 += pad;
+  const L=64,R=14,T=12,B=26;
+  const X = t => L+(t-x0)/(x1-x0||1)*(W-L-R), Y = v => T+(1-(v-y0)/(y1-y0||1))*(height-T-B);
+  g.font="11px sans-serif"; g.textAlign="right";
+  for (let i=0;i<=4;i++){ const v=y0+(y1-y0)*i/4, y=Y(v);
+    g.strokeStyle="rgba(34,42,56,.7)"; g.beginPath(); g.moveTo(L,y); g.lineTo(W-R,y); g.stroke();
+    g.fillStyle="#5b6678"; g.fillText(inr(v,0), L-8, y+4); }
+  g.textAlign="center"; g.fillStyle="#5b6678";
+  [[x0,L+30],[(x0+x1)/2,(L+W-R)/2],[x1,W-R-40]].forEach(([t,x]) =>
+    g.fillText(new Date(t/1e6).toLocaleDateString("en-IN",{month:"short",day:"numeric"}), x, height-8));
+  const up = ys[ys.length-1] >= 0;
+  const grad = g.createLinearGradient(0,T,0,height-B);
+  grad.addColorStop(0, up?"rgba(46,204,143,.25)":"rgba(255,93,93,.25)"); grad.addColorStop(1,"rgba(0,0,0,0)");
+  g.beginPath(); g.moveTo(X(xs[0]),Y(0));
+  curve.forEach(p=>g.lineTo(X(p.ts),Y(p.realized_pnl)));
+  g.lineTo(X(xs[xs.length-1]),Y(0)); g.closePath(); g.fillStyle=grad; g.fill();
+  g.beginPath(); g.lineWidth=2; g.strokeStyle=up?"#2ecc8f":"#ff5d5d";
+  curve.forEach((p,i)=>i?g.lineTo(X(p.ts),Y(p.realized_pnl)):g.moveTo(X(p.ts),Y(p.realized_pnl)));
+  g.stroke();
+  return wrap;
+}
+
+/* ============================== TODAY ============================== */
+async function renderToday(m) {
+  const [wl, recs, perf] = await Promise.all([
+    api("/market-data/watchlist").catch(()=>({quotes:[]})),
+    api("/trades/recommendations").catch(()=>[]),
+    api("/performance/stats").catch(()=>null),
+  ]);
+  const nifty = wl.quotes.find(q=>q.symbol==="NIFTY") || wl.quotes[0];
+  const open = Array.isArray(recs) ? recs : [];
+  m.append(el(`<div class="stats">` +
+    stat("Market now", nifty ? `${inr(nifty.current_price,0)} <span style="font-size:14px" class="${cls(nifty.change_pct)}">${nifty.change_pct>0?"+":""}${inr(nifty.change_pct,2)}%</span>` : "—",
+         nifty ? nifty.name : "Watchlist unavailable.") +
+    stat("Awaiting your decision", inr(open.length,0), "Trade ideas below — approve, reject, or check their history first.", open.length?"warn":"") +
+    stat("Recent accuracy", perf && perf.hit_rate_24h!=null ? (perf.hit_rate_24h*100).toFixed(0)+"%" : "—",
+         perf ? `Of ${perf.graded_count} recent calls, this many were right a day later.` : "No graded calls yet.",
+         perf && perf.hit_rate_24h>=0.5 ? "pos":"warn") +
+    `</div>`));
+
+  // Recommendation cards — the old UI's heart, kept.
+  const wrap = el(section("Trade ideas waiting for you",
+    "Each card is one suggestion from the assistant. <b>Not sure?</b> Hit “Check history first” — it tests the same strategy on years of real data before you risk anything.",
+    `<div style="display:flex;gap:8px;margin-bottom:14px">
+       <input type="text" id="rec-symbol" placeholder="Get an idea for… e.g. INFY" style="max-width:200px"
+              list="today-symbols" onkeydown="if(event.key==='Enter')generateRec()">
+       <datalist id="today-symbols"></datalist>
+       <select id="rec-horizon" style="max-width:150px"><option value="">Short-term</option>
+         <option>1M</option><option>3M</option><option>6M</option><option>1Y</option><option>SW</option></select>
+       <button class="btn primary" id="rec-go" onclick="generateRec()">✦ Ask the assistant</button>
+     </div><div id="rec-cards"></div>`)).firstChild;
+  m.append(wrap);
+  loadSymbolCatalog().then(cat => {
+    const dl = document.getElementById("today-symbols");
+    if (cat && dl) dl.innerHTML = cat.symbols.map(s=>`<option value="${s.symbol}">`).join("");
+  });
+  const cards = wrap.querySelector("#rec-cards");
+  if (!open.length) cards.innerHTML = `<div class="empty"><p>No open trade ideas right now. Ask the assistant above.</p></div>`;
+  open.forEach(r => {
+    const card = el(`<div class="rec-card">
+      <div class="body">
+        <div class="head">
+          <span class="sym">${esc(r.symbol)}</span>
+          <span class="badge ${String(r.side).toLowerCase()==="buy"?"green":"red"}">${esc(String(r.side).toUpperCase())}</span>
+          ${r.horizon?`<span class="badge blue">${esc(r.horizon)}</span>`:""}
+          <span style="color:var(--faint);font-size:12px">Confidence ${r.confidence_score!=null?(r.confidence_score*100).toFixed(0)+"%":"—"}</span>
+        </div>
+        <div class="why">${esc(r.reasoning || "")}</div>
+        <div class="levels">
+          <div><span>Entry</span> <b>₹${inr(r.entry_price)}</b></div>
+          <div><span>Target</span> <b class="pos">₹${inr(r.target_price)}</b></div>
+          <div><span>Stop loss</span> <b class="neg">₹${inr(r.stop_loss)}</b></div>
+          ${r.quantity?`<div><span>Qty</span> <b>${inr(r.quantity,0)}</b></div>`:""}
+        </div>
+      </div>
+      <div class="acts">
+        <button class="btn go" onclick="previewApprove(${r.id})">Approve & Execute</button>
+        <button class="btn" onclick="go('Check a Strategy','${r.symbol}')">Check history first →</button>
+        <button class="btn danger" onclick="rejectRec(${r.id})">Reject</button>
+      </div>
+    </div>`).firstChild;
+    cards.append(card);
+  });
+
+  m.append(el(section("Market watchlist", "Live quotes (free source, ~15 min delayed).",
+    table(["Instrument","Price","Change","Day range"], wl.quotes.map(q=>[
+      `<b>${esc(q.symbol)}</b> <span style="color:var(--faint)">${esc(q.name??"")}</span>`,
+      inr(q.current_price),
+      `<span class="${cls(q.change_pct)}">${q.change_pct>0?"+":""}${inr(q.change_pct,2)}%</span>`,
+      `${inr(q.day_low)} – ${inr(q.day_high)}`]), "Watchlist unavailable."))));
+}
+
+/* ============================== CHECK A STRATEGY ============================== */
+// Form state lives in JS so re-renders (period/strategy clicks) never wipe
+// what the user typed — the #1 reported "buttons don't work" bug.
+let ckStrategy = "model", ckPeriod = 500, ckSymbols = "RELIANCE", ckRefresh = true,
+    ckBusy = false, ckProgress = "", symbolCatalog = null;
+async function loadSymbolCatalog() {
+  if (symbolCatalog) return symbolCatalog;
+  try { symbolCatalog = await api("/dash/symbols?interval=day"); } catch { symbolCatalog = null; }
+  return symbolCatalog;
+}
+async function renderCheck(m) {
+  const journals = await listJournals();
+  if (checkPrefill) { ckSymbols = checkPrefill; checkPrefill = null; }
+  const dis = ckBusy ? "disabled" : "";
+  const form = el(section("Test it on real history",
+    "Pick a stock and a period. The assistant replays years of actual market data through the FULL system — strategy, safety checks, realistic costs — and tells you plainly how it would have gone. Nothing real is traded.",
+    `<div class="form-grid">
+      <div><label>Stock(s) — comma for several</label>
+        <input type="text" id="ck-symbols" value="${esc(ckSymbols)}" list="symbol-list" ${dis}
+               oninput="ckSymbols=this.value" onkeydown="if(event.key==='Enter')runCheck()">
+        <datalist id="symbol-list"></datalist>
+        <div id="ck-hint" style="font-size:11px;color:var(--faint);margin-top:4px"></div></div>
+      <div><label>Period</label><div class="seg">
+        <button ${dis} class="${ckPeriod===250?'on':''}" onclick="ckPeriod=250;render()">1 year</button>
+        <button ${dis} class="${ckPeriod===500?'on':''}" onclick="ckPeriod=500;render()">2 years</button>
+        <button ${dis} class="${ckPeriod===1250?'on':''}" onclick="ckPeriod=1250;render()">5 years</button></div></div>
+      <div><label>Decide with</label><div class="seg">
+        <button ${dis} class="${ckStrategy==='model'?'on':''}" onclick="ckStrategy='model';render()">AI model</button>
+        <button ${dis} class="${ckStrategy==='momentum'?'on':''}" onclick="ckStrategy='momentum';render()">Simple rules</button></div></div>
+      <div><label>Data</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);text-transform:none">
+          <input type="checkbox" id="ck-refresh" ${ckRefresh?"checked":""} ${dis} style="width:auto"
+                 onchange="ckRefresh=this.checked"> Pull latest prices first
+        </label></div>
+    </div>
+    <button class="btn primary" id="ck-go" ${dis} onclick="runCheck()">${ckBusy ? "⏳ " + (ckProgress || "Checking…") : "▶ Check this strategy"}</button>`)).firstChild;
+  m.append(form);
+  loadSymbolCatalog().then(cat => {
+    if (!cat) return;
+    const dl = document.getElementById("symbol-list");
+    const hint = document.getElementById("ck-hint");
+    if (dl) dl.innerHTML = cat.symbols.map(s=>`<option value="${s.symbol}">`).join("");
+    if (hint) hint.textContent = `${inr(cat.n_symbols,0)} NSE stocks available — start typing to search.`;
+  });
+  if (journals.length) {
+    m.append(el(journalPicker(journals, "Past checks")));
+    await renderVerdict(m);
+  } else if (!ckBusy) {
+    m.append(el(`<div class="section"><div class="empty"><p>Your first check's verdict will appear here.</p></div></div>`));
+  }
+}
+function ckStep(msg) { ckProgress = msg; const b = document.getElementById("ck-go"); if (b) b.textContent = "⏳ " + msg; }
+async function runCheck() {
+  if (ckBusy) return;
+  const symbols = ckSymbols.trim().toUpperCase();
+  if (!symbols) return toast("Pick a stock first", "err");
+  const wantRefresh = ckRefresh;  // capture BEFORE re-render
+  const name = "check-" + symbols.split(",")[0].trim().toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,20);
+  ckBusy = true; ckProgress = "Starting…"; render();
+  try {
+    if (wantRefresh) {
+      ckStep(`Getting latest prices for ${symbols.split(",")[0]}…`);
+      await api("/learning/data/ingest", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({preset:"custom", symbols: symbols.split(",").map(s=>s.trim()),
+          interval:"day", lookback_days:1825, skip_existing:false, throttle:0.4})});
+      for (let i=0;i<240;i++){ await new Promise(r=>setTimeout(r,1000));
+        const s = await api("/learning/data/status"); if (!s.running) break; }
+      symbolCatalog = null;
+    }
+    ckStep("Replaying history through the full system…");
+    await api("/dash/backtest", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({name, symbols, source:"real", strategy:ckStrategy,
+                            interval:"day", last_n:ckPeriod, overwrite:true})});
+    for (let i=0;i<240;i++){ await new Promise(r=>setTimeout(r,1000));
+      const {jobs} = await api("/dash/backtest/jobs");
+      const job = jobs.find(j=>j.name===name);
+      if (job && job.state !== "running") {
+        if (job.state === "error") throw new Error(job.error);
+        break;
+      }
+    }
+    journal = name + ".jsonl";
+    toast("Check complete ✓ — verdict below", "ok");
+  } catch (e) { toast(esc(e.message), "err"); }
+  finally { ckBusy = false; ckProgress = ""; render(); }
+}
+async function renderVerdict(m) {
+  const t = await api(`/dash/journal/${journal}/trading`);
+  let tca = await api(`/dash/tca?db=${journal.replace(".jsonl","")}`).catch(()=>null);
+  if (!tca || !tca.aggregates.n_fills) tca = {aggregates:{total_is_cost:0}};
+  const curve = t.equity_curve;
+  const deltas = curve.map((p,i)=> i? p.realized_pnl - curve[i-1].realized_pnl : p.realized_pnl).filter(d=>Math.abs(d)>1e-9);
+  const wins = deltas.filter(d=>d>0).length;
+  const days = curve.length>1 ? Math.round((curve[curve.length-1].ts - curve[0].ts)/86400e9) : 0;
+  const total = t.equity_pnl_total, good = total > 0;
+  const verdictText = t.counts.fills === 0
+    ? `This strategy made <b>no trades</b> on this data — nothing to judge. Try a longer period or another stock.`
+    : `Trading this way over the last <b>${days || "—"} days</b> would have ` +
+      `<b class="${cls(total)}">${good?"made":"lost"} ${money(Math.abs(total))}</b> ` +
+      `across <b>${t.counts.fills} trades</b>` +
+      (deltas.length ? ` (<b>${wins}/${deltas.length}</b> closed winners)` : "") +
+      `. Trading costs took <b>${money(tca.aggregates.total_is_cost)}</b>.` +
+      (t.unrealized_pnl_total < -0.3*Math.abs(t.realized_pnl_total||1)
+        ? ` <span class="warn">⚠ Most of the damage is a still-open losing position — this strategy holds losers.</span>` : "");
+  const v = el(section("", "", `<div class="headline">${verdictText}</div>
+    <div class="sub2">Result for <b>${journal.replace(".jsonl","")}</b> · every number is reproducible (see Replay in Advanced).</div>`)).firstChild;
+  v.classList.add("verdict");
+  m.append(v);
+  const chartSec = el(section("Profit over time", "Cumulative profit from closed trades across the period.", "")).firstChild;
+  chartSec.append(equityChart(curve));
+  m.append(chartSec);
+  m.append(el(section("What it held at the end", "Open positions valued at the last price in the data.",
+    table(["Stock","Qty","Avg cost","Last price","Realized","Open P&L"],
+      t.positions.map(p=>[`<b>${p.symbol}</b>`, inr(p.qty,0), inr(p.avg_price), inr(p.last_price),
+        `<span class="${cls(p.realized_pnl)}">${money(p.realized_pnl)}</span>`,
+        `<span class="${cls(p.unrealized_pnl)}">${money(p.unrealized_pnl)}</span>`]),
+      "No positions at the end."))));
+}
+
+/* ============================== BROKERS ============================== */
+let bkBroker = "", bkPaper = true;
+async function renderBrokers(m) {
+  const [supported, accountsRes] = await Promise.all([
+    api("/brokers/supported").catch(()=>({brokers:[]})),
+    api("/brokers/accounts").catch(()=>({accounts:[]})),
+  ]);
+  const accounts = accountsRes.accounts ?? [];
+  const specs = supported.brokers ?? [];
+  if (!bkBroker && specs.length) bkBroker = specs[0].slug ?? specs[0].broker_name ?? "";
+
+  m.append(el(section("Connected accounts",
+    "“Approve & Execute” routes orders through these. Daily-token brokers (Zerodha/Upstox/Dhan) need a fresh access token each trading day — use “Rotate token”.",
+    table(["Broker","Label","Status","Mode","Token expires","Actions"],
+      accounts.map(a=>[
+        `<b>${esc(a.broker_name ?? "?")}</b>`,
+        esc(a.label ?? "—"),
+        (a.is_connected ?? a.connected) ? `<span class="badge green">connected</span>` : `<span class="badge red">disconnected</span>`,
+        (a.is_paper ?? true) ? `<span class="badge blue">paper</span>` : `<span class="badge red">LIVE</span>`,
+        esc(a.token_expires_at ?? "—"),
+        `<button class="btn" onclick="brokerRefresh(${a.id})">Re-check</button>
+         <button class="btn" onclick="brokerRotate(${a.id})">Rotate token</button>
+         <button class="btn danger" onclick="brokerDisconnect(${a.id}, '${esc(a.broker_name ?? "")}')">Disconnect</button>`]),
+      "No broker accounts yet — connect one below. Until then, approvals can't execute."))));
+
+  m.append(el(section("Connect a broker",
+    "Credentials are stored encrypted in the local database and never leave this machine. Start in PAPER mode — flip to live only when you trust the system with real money.",
+    `<div class="form-grid">
+      <div><label>Broker</label><select id="bk-name" onchange="bkBroker=this.value">
+        ${specs.map(s=>`<option value="${esc(s.slug ?? s.broker_name)}" ${ (s.slug??s.broker_name)===bkBroker?"selected":"" }>${esc(s.name ?? s.slug ?? s.broker_name)}</option>`).join("")}
+      </select></div>
+      <div><label>API key</label><input type="text" id="bk-key" autocomplete="off"></div>
+      <div><label>API secret (if the broker uses one)</label><input type="text" id="bk-secret" autocomplete="off"></div>
+      <div><label>Access token (daily for most Indian brokers)</label><input type="text" id="bk-token" autocomplete="off"></div>
+      <div><label>Client / account id (optional)</label><input type="text" id="bk-account"></div>
+      <div><label>Label (optional)</label><input type="text" id="bk-label" placeholder="e.g. my zerodha"></div>
+      <div><label>Mode</label><div class="seg">
+        <button class="${bkPaper?'on':''}" onclick="bkPaper=true;render()">Paper (safe)</button>
+        <button class="${!bkPaper?'on':''}" onclick="bkPaper=false;render()">LIVE</button></div></div>
+    </div>
+    <button class="btn primary" id="bk-go" onclick="brokerConnect()">🔌 Connect</button>`)));
+}
+async function brokerConnect() {
+  if (actionBusy) return;
+  actionBusy = true;
+  const btn = document.getElementById("bk-go");
+  btn.disabled = true; btn.textContent = "Connecting…";
+  try {
+    const body = {
+      broker_name: document.getElementById("bk-name").value,
+      api_key: document.getElementById("bk-key").value.trim() || null,
+      api_secret: document.getElementById("bk-secret").value.trim() || null,
+      access_token: document.getElementById("bk-token").value.trim() || null,
+      account_id: document.getElementById("bk-account").value.trim() || null,
+      label: document.getElementById("bk-label").value.trim() || null,
+      is_paper: bkPaper,
+    };
+    if (!bkPaper && !confirm("Connect in LIVE mode? Approved orders will move REAL money through this account.")) return;
+    await api("/brokers/connect", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    toast(`${body.broker_name} connected ✓`, "ok"); render();
+  } catch (e) { toast(esc(e.message), "err"); btn.disabled = false; btn.textContent = "🔌 Connect"; }
+  finally { actionBusy = false; }
+}
+async function brokerRefresh(id) {
+  try { await api(`/brokers/accounts/${id}/refresh`, {method:"POST"}); toast("Status re-checked", "ok"); render(); }
+  catch (e) { toast(esc(e.message), "err"); }
+}
+async function brokerRotate(id) {
+  const token = prompt("Paste today's new access token:");
+  if (!token) return;
+  try {
+    await api(`/brokers/accounts/${id}/refresh-token`, {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({access_token: token.trim()})});
+    toast("Token rotated ✓", "ok"); render();
+  } catch (e) { toast(esc(e.message), "err"); }
+}
+async function brokerDisconnect(id, name) {
+  if (!confirm(`Disconnect ${name}? Its stored credentials are removed.`)) return;
+  try { await api(`/brokers/accounts/${id}`, {method:"DELETE"}); toast(`${name} disconnected`, "ok"); render(); }
+  catch (e) { toast(esc(e.message), "err"); }
+}
+
+/* ============================== ADVANCED PAGES ============================== */
+const RENDER = {
+  Today: renderToday,
+  "Check a Strategy": renderCheck,
+  Brokers: renderBrokers,
+
+  async Risk(m) {
+    const journals = await listJournals();
+    if (!journal) return noSession(m);
+    m.append(el(journalPicker(journals)));
+    const r = await api(`/dash/journal/${journal}/risk`);
+    m.append(el(`<div class="stats">` +
+      stat("Approved", inr(r.approved,0), "Orders that passed every pre-trade safety check.", "pos") +
+      stat("Blocked", inr(r.rejected,0), "Signals refused by the risk gateway.", r.rejected?"neg":"") +
+      stat("Autonomy tiers", `${r.tier_counts[1]||0} / ${r.tier_counts[2]||0} / ${r.tier_counts[3]||0}`,
+           "T1 auto · T2 notify · T3 needs approval. New strategies start at T3.") +
+      stat("Kill switches", inr(r.kill_switches.length,0), "Emergency stops fired.", r.kill_switches.length?"warn":"") + `</div>`));
+    m.append(el(section("Why orders were blocked", "Each rejection names the exact check that failed.",
+      table(["Risk check","Times"], Object.entries(r.reject_reasons).map(([k,v])=>[k,v]),
+        "Nothing was blocked — all signals fit the limits."))));
+    m.append(el(section("Limit changes (slow path)", "The analyst may tighten limits automatically; loosening needs a human. Changes expire back to baseline.",
+      table(["Time","Limit","Change","Source","TTL (s)","Why"], r.param_changes.map(p=>[
+        when(p.ts), p.parameter.replace("risk.",""), `${inr(p.old,0)} → <b>${inr(p.new,0)}</b>`, p.source, p.ttl_s ?? "—", p.rationale]),
+        "No limit changes this session."))));
+  },
+
+  async "AI & Model"(m) {
+    const journals = await listJournals();
+    if (!journal) return noSession(m);
+    m.append(el(journalPicker(journals)));
+    const [a, model, llm] = await Promise.all([
+      api(`/dash/journal/${journal}/ai`), api("/dash/model"), api("/dash/llm")]);
+    m.append(el(`<div class="stats">` +
+      stat("Decision model", model.present ? model.model_id : "rules (SMA)",
+           model.present ? `${model.n_features} features · signed artifact.` : "No trained model — simple rules in use.") +
+      stat("Thresholds", model.present ? `${model.enter_threshold} / ${model.exit_threshold}` : "—",
+           "Buy above the first, exit below the second.") +
+      stat("News analyst", llm.provider, `${llm.model} — may only tighten risk, never trade.`) +
+      stat("Analyst proposals", inr(a.proposals.length,0), "Bounded limit-change requests this session.") + `</div>`));
+    m.append(el(section("Every decision, explained", "The model's confidence and the top signals behind each trade (SHAP attribution).",
+      table(["Time","Stock","Action","Confidence","Top drivers"],
+        a.decisions.slice().reverse().map(d=>[when(d.ts), `<b>${d.symbol}</b>`,
+          `<span class="badge ${d.side==="BUY"?"green":"red"}">${d.side}</span>`,
+          d.prob!=null?(d.prob*100).toFixed(1)+"%":d.reason,
+          d.top_attributions.map(([k,v])=>`${k} <span class="${cls(v)}">${v>=0?"+":""}${v.toFixed(2)}</span>`).join(" · ")]),
+        "No decisions in this session."))));
+  },
+
+  async Costs(m) {
+    const journals = await listJournals();
+    if (!journal) return noSession(m);
+    m.append(el(journalPicker(journals)));
+    let t = await api(`/dash/tca?db=${journal.replace(".jsonl","")}`).catch(()=>null);
+    if (!t || !t.aggregates.n_fills) t = await api("/dash/tca");
+    const a = t.aggregates;
+    if (!a.n_fills) { m.append(el(`<div class="section"><div class="empty"><p>No cost data for this result.</p></div></div>`)); return; }
+    m.append(el(`<div class="stats">` +
+      stat("Trades analysed", inr(a.n_fills,0), "Every fill gets a cost breakdown.") +
+      stat("Delay cost", inr(a.delay_bps,2)+" bps", "Price moved between signal and order (overnight gaps land here).") +
+      stat("Execution cost", inr(a.execution_bps,2)+" bps", "Spread + impact at the fill.") +
+      stat("Fees", inr(a.fees_bps,2)+" bps", "Brokerage and charges.") +
+      stat("Total cost", money(a.total_is_cost), "What costs took out of this result.", "neg") + `</div>`));
+    m.append(el(section("Recent fills", "Markouts: did price keep moving your way after the fill? (+ favorable)",
+      table(["Stock","Side","Qty","Decision px","Fill px","Cost (bps)","Markouts"],
+        t.rows.slice(-40).reverse().map(r=>[`<b>${r.symbol}</b>`, r.side, inr(r.qty,0), inr(r.decision_price), inr(r.fill_price),
+          `<span class="${cls(-r.total_is_bps)}">${inr(r.total_is_bps,2)}</span>`,
+          Object.entries(r.markouts_bps||{}).map(([h,v])=>`+${h} <span class="${cls(v)}">${inr(v,1)}</span>`).join(" · ")])))));
+  },
+
+  async Replay(m) {
+    const journals = await listJournals();
+    if (!journal) return noSession(m);
+    m.append(el(journalPicker(journals)));
+    m.append(el(section("Prove it reproduces",
+      "Re-runs every market bar in this result through a fresh copy of the system and compares the regenerated trades with what was recorded. MATCH means the result is fully reproducible — not a fluke of the run.",
+      `<div style="display:flex;gap:10px;margin-bottom:14px">
+         <button class="btn primary" onclick="runReplay(true)">Replay (AI model)</button>
+         <button class="btn" onclick="runReplay(false)">Replay (simple rules)</button>
+       </div><div id="replay-out"></div>`)));
+  },
+
+  async System(m) {
+    const journals = await listJournals();
+    if (!journal) return noSession(m);
+    m.append(el(journalPicker(journals)));
+    const p = await api(`/dash/journal/${journal}/platform`);
+    m.append(el(`<div class="stats">` +
+      stat("Events recorded", inr(p.n_events,0), "Every tick, check and fill in this result.") +
+      stat("Tamper evidence", p.chain_ok ? "VERIFIED" : "BROKEN", "Hash-chained log: edits to history break the chain.", p.chain_ok?"pos":"neg") +
+      stat("Span", inr(p.span_seconds/86400,1)+" days", "Market time covered.") + `</div>`));
+    m.append(el(section("Events by stream", "Where the volume lives in the event log.",
+      table(["Stream","Events"], Object.entries(p.streams).map(([k,v])=>[k,inr(v,0)])))));
+    const cat = await loadSymbolCatalog();
+    if (cat) {
+      const through = cat.freshest_t ? new Date(cat.freshest_t*1000).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "—";
+      m.append(el(section("Market data store",
+        `${inr(cat.n_symbols,0)} stocks · ${inr(cat.total_bars,0)} daily bars · freshest through <b>${through}</b>. Stalest below.`,
+        table(["Stock","Bars","Oldest","Newest"], cat.stalest.map(s=>[`<b>${s.symbol}</b>`, inr(s.bars,0),
+          new Date(s.first_t*1000).toLocaleDateString("en-IN",{month:"short",year:"numeric"}),
+          `<span class="warn">${new Date(s.last_t*1000).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</span>`])))));
+    }
+    // Broker connections — managed in the classic app, status visible here.
+    const accounts = await api("/brokers/accounts").catch(()=>null);
+    const accList = Array.isArray(accounts) ? accounts : (accounts?.accounts ?? []);
+    const brokersUrl = appLinks && appLinks.classic_app ? appLinks.classic_app.brokers_url : null;
+    m.append(el(section("Broker connections",
+      `Approve & Execute routes orders through these. Connect or fix them in the classic app` +
+      (brokersUrl && appLinks.classic_app.reachable ? ` — <a href="${brokersUrl}" target="_blank" style="color:var(--accent)">open broker page ↗</a>.` : ` (currently offline — start it or set ETB_LEGACY_UI_URL in .env).`),
+      table(["Broker","Status","Paper/Live","Token expires"],
+        accList.map(a=>[`<b>${esc(a.broker_name ?? a.broker ?? "?")}</b>`,
+          a.is_connected ?? a.connected ? `<span class="badge green">connected</span>` : `<span class="badge red">disconnected</span>`,
+          (a.is_paper ?? true) ? "Paper" : `<span class="warn">LIVE</span>`,
+          esc(a.token_expires_at ?? "—")]),
+        "No broker accounts connected yet — orders can't execute until one is."))));
+  },
+};
+
+function noSession(m) {
+  m.append(el(`<div class="section"><div class="empty"><div class="big">✓</div>
+    <p>No strategy checks yet — run one and this page fills up.</p>
+    <button class="btn primary" onclick="go('Check a Strategy')">Check a strategy</button></div></div>`));
+}
+
+async function runReplay(useModel) {
+  const out = document.getElementById("replay-out");
+  out.innerHTML = `<div class="empty"><p>Replaying — re-running every bar, one moment…</p></div>`;
+  try {
+    const d = await api(`/dash/journal/${journal}/replay?use_model=${useModel}`, {method:"POST"});
+    out.innerHTML = `<div class="stats">` +
+      stat("Result", d.match ? "MATCH ✓" : "DIFFERENT ✗",
+           d.match ? "Reproduced bit-for-bit." : "Differs — usually a different strategy than the original run.", d.match?"pos":"neg") +
+      stat("Bars replayed", inr(d.bars_replayed,0), "Market events re-processed.") +
+      stat("Replay P&L", money(d.replay_summary.realized_pnl_total), "Profit the replay produced.", cls(d.replay_summary.realized_pnl_total)) +
+      `</div>` + (d.divergence ? `<pre>${JSON.stringify(d.divergence,null,2)}</pre>` : "");
+  } catch (e) { out.innerHTML = `<div class="empty"><p class="neg">${e.message}</p></div>`; }
+}
+
+/* ============================== actions ============================== */
+let actionBusy = false;  // serialize destructive clicks; ignore double-clicks
+async function previewApprove(id) {
+  if (actionBusy) return;
+  actionBusy = true;
+  try {
+    const p = await api(`/trades/${id}/preview`);
+    const o = p.order || {};
+    const msg = `APPROVE this trade?\n\n` +
+      `${o.side ?? ""} ${o.quantity ?? "?"} × ${o.symbol ?? ""} @ ${o.price != null ? "₹" + inr(o.price) : "market"}\n` +
+      `Estimated cost: ${money(p.estimated_cost)}\n` +
+      `Broker: ${p.broker_label ?? p.broker ?? "?"}\n\n` +
+      `${p.warning ?? ""}`;
+    if (!confirm(msg)) return;
+    await api(`/trades/${id}/approve`, {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({confirmed: true})});
+    toast(`Trade approved ✓ — see Trade history in the old app or /api/v1/trades/history`, "ok");
+    render();
+  } catch (e) {
+    // Most common real failure: no broker connected yet — backend says so clearly.
+    toast(esc(e.message), "err");
+  } finally { actionBusy = false; }
+}
+async function rejectRec(id) {
+  if (actionBusy) return;
+  actionBusy = true;
+  try { await api(`/trades/${id}/reject`, {method:"POST"}); toast("Rejected", "ok"); render(); }
+  catch (e) { toast(esc(e.message), "err"); }
+  finally { actionBusy = false; }
+}
+let genBusy = false;
+async function generateRec() {
+  if (genBusy) return;
+  const input = document.getElementById("rec-symbol");
+  const sym = input.value.trim().toUpperCase();
+  const horizon = document.getElementById("rec-horizon").value;
+  if (!sym) { toast("Type a stock symbol first", "err"); input.focus(); return; }
+  genBusy = true;
+  const btn = document.getElementById("rec-go");
+  if (btn) { btn.disabled = true; btn.textContent = `Analysing ${sym}…`; }
+  toast(`Analysing ${sym} — technicals + news, ~10-30s…`);
+  try {
+    await api(`/trades/recommendations?symbols=${encodeURIComponent(sym)}&refresh=true` + (horizon?`&horizon=${horizon}`:""));
+    toast(`Idea for ${sym} ready ↓`, "ok"); genBusy = false; render();
+  } catch (e) {
+    toast(esc(e.message), "err"); genBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = "✦ Ask the assistant"; }
+  }
+}
+
+/* ============================== render loop ============================== */
+async function render() {
+  renderNav();
+  renderAppLinks();  // async, fills sidebar footer when ready
+  const m = document.getElementById("main");
+  const found = PAGES.find(p => p[0] === page);
+  m.innerHTML = `<div class="page-head"><div><h1>${found[0]}</h1><p>${found[2]}</p></div>
+    <div class="actions"><button class="btn" onclick="render()">↻ Refresh</button></div></div>`;
+  try {
+    await RENDER[page](m);
+    document.getElementById("sysdot").className = "dot";
+    document.getElementById("systext").textContent = "connected";
+  } catch (e) {
+    document.getElementById("sysdot").className = "dot bad";
+    document.getElementById("systext").textContent = "API error";
+    m.append(el(`<div class="section"><div class="empty"><p class="neg">${e.message}</p></div></div>`));
+  }
+}
+render();
+</script>
+</body>
+</html>
