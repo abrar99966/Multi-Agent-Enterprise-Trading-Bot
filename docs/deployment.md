@@ -1,4 +1,4 @@
-<![CDATA[# Deployment Guide
+# Deployment Guide
 
 This document covers deploying the Multi-Agent Enterprise Trading Bot from local development through to production environments.
 
@@ -238,4 +238,3 @@ ETB_LLM_PROVIDER=openai
 ETB_LLM_MODEL=gpt-4o-mini
 ETB_LLM_API_KEY=<your-key>
 ```
-]]>

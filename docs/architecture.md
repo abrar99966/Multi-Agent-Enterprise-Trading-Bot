@@ -1,4 +1,4 @@
-<![CDATA[# System Architecture
+# System Architecture
 
 ## Overview
 
@@ -184,4 +184,3 @@ All polls pause when tab is hidden (`visibilitychange`) and abort in-flight requ
 - **API Masking:** Raw keys never returned in API responses
 - **Risk Gates:** Kill switch < 1s to halt all trading
 - **Approval Flow:** Every order requires preview → confirm (LIVE orders get rose-red confirmation)
-]]>

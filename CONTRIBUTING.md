@@ -1,4 +1,4 @@
-<![CDATA[# Contributing to Multi-Agent Enterprise Trading Bot
+# Contributing to Multi-Agent Enterprise Trading Bot
 
 Thank you for your interest in contributing! This document provides guidelines for contributing to the project.
 
@@ -173,4 +173,3 @@ pytest --cov=backend/app
 ## 📬 Questions?
 
 Open an issue on GitHub or reach out to [@abrar99966](https://github.com/abrar99966).
-]]>

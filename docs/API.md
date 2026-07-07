@@ -1,4 +1,4 @@
-<![CDATA[# API Reference
+# API Reference
 
 Complete REST API reference for the Multi-Agent Enterprise Trading Bot.
 
@@ -234,4 +234,3 @@ All errors return consistent JSON:
 - Recommendation regeneration: 30-minute per-symbol cache (bypass with `?refresh=true`)
 - Performance grading: rate-limited to once per 60 seconds (bypass with `/grade-now`)
 - Market data: provider-dependent (Yahoo Finance has rate limits)
-]]>
