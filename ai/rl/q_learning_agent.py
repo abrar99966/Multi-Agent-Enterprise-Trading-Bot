@@ -9,11 +9,18 @@ enough samples, so it's a no-op until it has actually learned something.
 
 Persisted to disk so learning survives restarts. This is the literal
 "self-learning agent": outcomes → policy → better-sized future conviction.
+
+OBB enrichment (optional):
+    Call ``await rl_learning_agent.warm(symbols)`` at startup to pre-fetch real
+    OBB news sentiment and FRED macro data. After that, use
+    ``await rl_learning_agent.get_state_obb(symbol, agent_outputs)`` instead of
+    ``get_state()`` to get enriched state keys (same format, more informative).
+    Falls back to the original behaviour when OBB is not installed.
 """
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +56,11 @@ class RLTrader:
         return f"{horizon or 'ST'}|{regime or 'neutral'}|{signal or 'neutral'}|{sentiment or 'neutral'}"
 
     def get_state(self, agent_outputs: Dict[str, Any]) -> str:
-        """Derive the state key from a rec's agent outputs (used at grading time)."""
+        """Derive the state key from a rec's agent outputs (used at grading time).
+
+        Uses the values already present in agent_outputs (no I/O).
+        Prefer ``get_state_obb()`` for richer OBB-derived state.
+        """
         macro = agent_outputs.get("MacroEconomics") or {}
         he = agent_outputs.get("HorizonEngine") or {}
         tech = agent_outputs.get("TechnicalAnalysis") or {}
@@ -57,6 +68,36 @@ class RLTrader:
         rationale = agent_outputs.get("rationale") or {}
         signal = he.get("signal") or tech.get("signal")
         return self.state_of(rationale.get("horizon"), macro.get("market_regime"), signal, news.get("sentiment"))
+
+    async def warm(self, symbols: List[str]) -> None:
+        """Pre-fetch OBB news sentiment + FRED macro for a symbol universe.
+
+        Call at startup or before a grading batch.  Idempotent — re-fetches
+        are throttled internally (TTL 5 min).  No-op if OBB not installed.
+        """
+        try:
+            from app.learning.obb_rl_state import obb_rl_state
+            await obb_rl_state.warm(symbols)
+        except Exception as exc:
+            log.debug("OBB warm skipped: %s", exc)
+
+    async def get_state_obb(
+        self,
+        symbol: str,
+        agent_outputs: Dict[str, Any],
+    ) -> str:
+        """OBB-enriched state key for a grading event.
+
+        Same key format as ``get_state()`` so the q-table stays compatible.
+        Sentiment comes from real OBB news; macro regime from FRED data.
+        Falls back to ``get_state()`` when OBB is unavailable.
+        """
+        try:
+            from app.learning.obb_rl_state import obb_rl_state
+            return await obb_rl_state.state_for(symbol, agent_outputs)
+        except Exception as exc:
+            log.debug("OBB state_for failed, using fallback: %s", exc)
+            return self.get_state(agent_outputs)
 
     def update(self, state: str, reward: float) -> None:
         """Fold a graded outcome (+1 win / −1 loss) into the state's value."""
