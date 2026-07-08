@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from app.api.v1 import trades, auth, market_data, chat, brokers, learning, performance, execution, allocator, slowpath
+from app.api.v1 import trades, auth, market_data, chat, brokers, learning, performance, execution, allocator, slowpath, paper_trading
 from app.db.session import engine
 from app.models.database import Base
 
@@ -133,6 +133,11 @@ async def _init_db():
         )
     asyncio.create_task(asyncio.to_thread(bar_store.coverage_summary))
 
+    # Auto-start continuous paper trading in background
+    from app.engine.paper_trading_service import paper_trading_service
+    paper_trading_service.start()
+    logging.getLogger(__name__).info("Continuous paper trading service auto-started")
+
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(trades.router, prefix="/api/v1/trades", tags=["Trades"])
@@ -144,6 +149,7 @@ app.include_router(performance.router, prefix="/api/v1", tags=["Performance & Ri
 app.include_router(execution.router, prefix="/api/v1", tags=["Execution & Surveillance"])
 app.include_router(allocator.router, prefix="/api/v1", tags=["Allocator & Learning"])
 app.include_router(slowpath.router, prefix="/api/v1/slowpath", tags=["Slow Path Intelligence"])
+app.include_router(paper_trading.router, prefix="/api/v1", tags=["Paper Trading"])
 
 # Layer 6 — read-side dashboards (docs/LAYER6_DASHBOARDS.md). Projections over
 # the event journal + TCA store; strictly read-only.
