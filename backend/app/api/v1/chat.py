@@ -1,4 +1,4 @@
-﻿"""Conversational endpoint â€” routes a user question into the right agent
+"""Conversational endpoint â€” routes a user question into the right agent
 and returns a structured response the frontend can render."""
 
 import re
@@ -67,6 +67,8 @@ def _classify(text: str) -> str:
         return "macro"
     if any(w in t for w in ["hello", "hi ", "hey", "good morning", "good evening"]):
         return "greet"
+    if any(w in t for w in ["analyze", "assessment", "analyst", "persona", "deep dive", "in-depth", "fundamental", "sentiment", "technical analysis"]):
+        return "analyze"
     if any(w in t for w in ["who are you", "what can you do", "help", "capabilities"]):
         return "help"
     return "general"
@@ -180,6 +182,62 @@ async def chat(req: ChatRequest):
             )
         except Exception as exc:
             return ChatResponse(reply=f"Couldn't generate a recommendation: {exc}", intent="error")
+
+    if intent == "analyze":
+        if not symbol:
+            return ChatResponse(
+                reply="Which symbol should I run the analyst personas on? Try: \"Analyze RELIANCE\" or \"Deep dive INFY\".",
+                intent=intent,
+                suggestions=["Analyze RELIANCE", "Deep dive HDFCBANK", "Sentiment on INFY"],
+            )
+        try:
+            from app.slowpath.orchestrator import slowpath
+            result = await slowpath.analyze(
+                symbol=symbol,
+                headline=msg,
+                include_openbb=True,
+            )
+            # Format the multi-agent response
+            lines = [f"**Multi-Agent Analysis for {symbol}** ({result.get('provider', 'stub')}:{result.get('model', '')})", ""]
+            for persona, data in result.get("assessments", {}).items():
+                if data.get("status") == "ok":
+                    a = data["assessment"]
+                    direction = a.get("direction", "?")
+                    arrow = "\u2191" if direction == "bullish" else ("\u2193" if direction == "bearish" else "\u2194")
+                    lines.append(
+                        f"{arrow} **{persona.title()}**: {direction.upper()} "
+                        f"(severity: {a.get('severity', '?')}, confidence: {int(float(a.get('confidence', 0))*100)}%)\n"
+                        f"   {a.get('rationale', '')}"
+                    )
+                elif data.get("status") == "blocked":
+                    lines.append(f"\u23F8 **{persona.title()}**: Paused ({data.get('reason', '')})")
+                else:
+                    lines.append(f"\u26A0 **{persona.title()}**: {data.get('error', 'unavailable')}")
+
+            proposals = result.get("proposals", [])
+            if proposals:
+                lines.append("")
+                lines.append("**Risk Proposals:**")
+                for p in proposals:
+                    auto = "auto-applies" if p.get("auto_applies") else "needs approval"
+                    lines.append(
+                        f"  \u2022 {p['persona'].title()}: {p['direction']} "
+                        f"\u2192 {p['parameter']} = {p['proposed_value']:,.0f} ({auto})"
+                    )
+
+            reply = "\n".join(lines)
+            return ChatResponse(
+                reply=reply,
+                intent="analyze",
+                data={"analysis": result},
+                suggestions=[
+                    f"Quote {symbol}",
+                    f"Recommend a trade for {symbol}",
+                    f"Show agents dashboard",
+                ],
+            )
+        except Exception as exc:
+            return ChatResponse(reply=f"Analysis failed: {exc}", intent="error")
 
     if intent == "risk":
         return ChatResponse(

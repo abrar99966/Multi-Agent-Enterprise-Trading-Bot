@@ -96,7 +96,8 @@ The platform is built on a **dual-speed architecture** — a deterministic fast 
 │       │   ├── execution.py    # Execution algos, SOR, surveillance
 │       │   ├── allocator.py    # Capital allocation, bandit, RL execution
 │       │   ├── dashboards.py   # Layer 6 read-side analytics dashboards
-│       │   └── chat.py         # Natural-language Q&A
+│       │   ├── chat.py         # Natural-language Q&A + analyze intent
+│       │   └── slowpath.py    # Slow-path REST API (analyze, agents, governance)
 │       ├── agents/             # Multi-agent AI system
 │       │   ├── base.py         # Technical, News, Macro, Risk agents
 │       │   └── orchestrator.py # Decision agent — blends all agent outputs
@@ -149,6 +150,7 @@ The platform is built on a **dual-speed architecture** — a deterministic fast 
 │       │   ├── personas.py     # 4 specialist analysts (Fundamentals/Sentiment/Technical/Macro)
 │       │   ├── governance.py   # Agent lifecycle governor (register/pause/resume/terminate)
 │       │   ├── providers.py    # 12+ LLM provider adapters
+│       │   ├── orchestrator.py # SlowPathOrchestrator — enriches + dispatches
 │       │   ├── regime.py       # Regime classification
 │       │   └── params.py       # Bounded parameter proposals
 │       ├── surveillance/       # Compliance & surveillance
@@ -288,6 +290,7 @@ cd frontend && npm run dev
 | `http://127.0.0.1:8000/dash` | Institutional dashboard (new) |
 | `http://127.0.0.1:3001` | Classic trading desk |
 | `http://127.0.0.1:8000/docs` | API documentation (Swagger) |
+| `http://127.0.0.1:8000/api/v1/slowpath/dashboard` | Agent governance dashboard |
 | `http://127.0.0.1:8000/health` | Health check endpoint |
 
 ---

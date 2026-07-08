@@ -1,4 +1,4 @@
-﻿# Enterprise AI Trading Assistant - FastAPI entrypoint.
+# Enterprise AI Trading Assistant - FastAPI entrypoint.
 #
 # Canonical import root is `app.*` (backend/ on sys.path), same as the test
 # suite. The bootstrap below keeps `uvicorn backend.app.main:app` working from
@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from app.api.v1 import trades, auth, market_data, chat, brokers, learning, performance, execution, allocator
+from app.api.v1 import trades, auth, market_data, chat, brokers, learning, performance, execution, allocator, slowpath
 from app.db.session import engine
 from app.models.database import Base
 
@@ -117,6 +117,20 @@ async def _init_db():
     # Pre-warm the bar-store coverage cache (a full-table scan) so the first
     # Training/Screener tab load doesn't pay the ~2s cost on the hot path.
     from app.learning import bar_store
+
+    # Initialize slow-path persona agents with the configured LLM provider.
+    from app.slowpath.orchestrator import slowpath
+    try:
+        init_result = slowpath.initialize()
+        import logging
+        logging.getLogger(__name__).info(
+            "Slow-path agents initialized: %s", init_result
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "Slow-path init failed (non-fatal, fast path unaffected): %s", exc
+        )
     asyncio.create_task(asyncio.to_thread(bar_store.coverage_summary))
 
 
@@ -129,6 +143,7 @@ app.include_router(learning.router, prefix="/api/v1/learning", tags=["Learning"]
 app.include_router(performance.router, prefix="/api/v1", tags=["Performance & Risk"])
 app.include_router(execution.router, prefix="/api/v1", tags=["Execution & Surveillance"])
 app.include_router(allocator.router, prefix="/api/v1", tags=["Allocator & Learning"])
+app.include_router(slowpath.router, prefix="/api/v1/slowpath", tags=["Slow Path Intelligence"])
 
 # Layer 6 — read-side dashboards (docs/LAYER6_DASHBOARDS.md). Projections over
 # the event journal + TCA store; strictly read-only.
