@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     redpanda_brokers: str = ""  # e.g. "localhost:9092"
     questdb_ilp_host: str = ""  # e.g. "localhost"; ILP port 9009
 
+    # Public-API enrichment keys (slow path / product surface only -- NEVER the
+    # deterministic fast path). All optional: blank key = source disabled, its
+    # adapter returns empty and the app runs exactly as before (free/OSS mandate).
+    #   FRED       -- macro series for the macro regime analyst (free key).
+    #   Finnhub    -- market-data failover + news sentiment (free key).
+    #   OpenFIGI   -- cross-broker symbology mapping (works keyless at a lower
+    #                 rate limit; a free key raises it).
+    # The US Treasury daily yield curve needs NO key and is always on.
+    fred_api_key: str = ""
+    finnhub_api_key: str = ""
+    openfigi_api_key: str = ""
+
     # Slow-path LLM analyst -- vendor-agnostic, chosen by config (see
     # slowpath/providers.py). Default "stub" = no external model required.
     # provider: stub | anthropic | openai | groq | together | openrouter |

@@ -16,6 +16,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.slowpath.orchestrator import slowpath
+from app.slowpath.macro_regime import classify_macro_regime, _MACRO_SIZING
+from app.services.macro_data import macro_data
+from app.services.finnhub_provider import finnhub
+from app.services import openfigi_symbols
 
 router = APIRouter()
 
@@ -90,3 +94,92 @@ async def reset_agent_metrics(agent_id: str):
     if slowpath.reset_agent_metrics(agent_id):
         return {"status": "reset", "agent_id": agent_id}
     raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+
+
+# ── Public-API enrichment (slow path only, off the deterministic fast path) ──
+
+@router.get("/macro")
+async def macro_snapshot():
+    """Live macro-regime snapshot: US Treasury yield curve (no key required)
+    plus FRED VIX (when ETB_FRED_API_KEY is set). Reports the regime the
+    MacroRegimeAnalyst would classify and the TIGHTENING it would propose. Never
+    loosens, never emits an order — read-only advisory."""
+    point = await macro_data.latest_yield_curve()
+    spread = point.spread_10y_2y if point else None
+    vix = await macro_data.latest_value("VIXCLS")  # None when no FRED key
+    regime = classify_macro_regime(spread, vix)
+    factor = _MACRO_SIZING.get(regime) if regime else None
+    return {
+        "yield_curve": (
+            {"date": point.date, "y2": point.y2, "y10": point.y10,
+             "spread_10y_2y": spread, "inverted": point.inverted}
+            if point else None
+        ),
+        "vix": vix,
+        "fred_enabled": macro_data.fred_enabled,
+        "macro_regime": regime,
+        "would_tighten_gross_to_pct": round(factor * 100, 1) if factor else None,
+        "note": "read-only; tighten-only advisory. Treasury needs no key.",
+    }
+
+
+@router.get("/symbology/{ticker}")
+async def symbology(ticker: str, exch: str = "IN"):
+    """Resolve a ticker to its broker-neutral OpenFIGI id (works keyless).
+    ``exch`` narrows the exchange: IN (NSE/BSE), US (NYSE/NASDAQ)."""
+    ref = await openfigi_symbols.map_symbol(ticker, exch_code=exch)
+    if ref is None:
+        raise HTTPException(status_code=404,
+                            detail=f"No FIGI mapping for '{ticker}' on '{exch}'")
+    return {
+        "ticker": ticker.upper(), "exch": exch.upper(),
+        "figi": ref.figi, "name": ref.name, "figi_ticker": ref.ticker,
+        "exch_code": ref.exch_code, "security_type": ref.security_type,
+        "market_sector": ref.market_sector,
+    }
+
+
+@router.get("/macro/service/status")
+async def macro_service_status():
+    """Status of the always-on macro regime service: effective vs baseline
+    risk limits, current regime, polls, and proposals published."""
+    from app.engine.macro_regime_service import macro_regime_service
+    return macro_regime_service.status
+
+
+@router.post("/macro/service/start")
+async def macro_service_start():
+    """Start the background macro regime loop (opt-in; makes network calls).
+    Auto-publishes tightening proposals to its parameter controller."""
+    from app.engine.macro_regime_service import macro_regime_service
+    macro_regime_service.start()
+    return {"message": "Macro regime service started", "running": True,
+            "poll_interval_s": macro_regime_service._poll_interval}
+
+
+@router.post("/macro/service/stop")
+async def macro_service_stop():
+    """Stop the background macro regime loop."""
+    from app.engine.macro_regime_service import macro_regime_service
+    macro_regime_service.stop()
+    return {"message": "Macro regime service stopped", "running": False}
+
+
+@router.post("/macro/service/poll")
+async def macro_service_poll():
+    """Run ONE macro poll now (propose-on-stress, tick TTL, apply) and return
+    the resulting status. Lets you drive/observe the pipeline without waiting
+    for the interval."""
+    from app.engine.macro_regime_service import macro_regime_service
+    return await macro_regime_service.poll_once()
+
+
+@router.get("/enrichment/status")
+async def enrichment_status():
+    """Which public-API enrichment sources are live (keys configured)."""
+    return {
+        "treasury_yield_curve": True,          # always on, no key
+        "fred": macro_data.fred_enabled,
+        "finnhub": finnhub.enabled,
+        "openfigi": "keyless-ok (key raises rate limit)",
+    }

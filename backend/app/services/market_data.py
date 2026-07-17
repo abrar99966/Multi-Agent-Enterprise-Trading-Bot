@@ -216,12 +216,40 @@ class MarketDataService:
                 if q is not None:
                     return q.to_dict()
             except Exception as exc:
-                log.warning("Broker quote failed for %s via %s: %s — falling back to Yahoo",
+                log.warning("Broker quote failed for %s via %s: %s — falling back",
                             symbol, provider["broker_name"], exc)
+        # Finnhub failover (only when a key is configured; disabled = no-op).
+        fh = await self._finnhub_quote(symbol)
+        if fh is not None:
+            return fh
         # Yahoo fallback
         q = await self.get_quote(symbol)
         q["source"] = "yahoo"
         return q
+
+    async def _finnhub_quote(self, symbol: str):
+        """Normalized quote from Finnhub, or None (disabled / unknown / failure).
+        Slow-path/product-surface failover only — never a fast-path bar source."""
+        from .finnhub_provider import finnhub
+        if not finnhub.enabled:
+            return None
+        shaped = await finnhub.quote(symbol)
+        if shaped is None:
+            return None
+        return {
+            "symbol": symbol,
+            "price": shaped["price"],
+            "open": shaped["open"],
+            "high": shaped["high"],
+            "low": shaped["low"],
+            "prev_close": shaped["prev_close"],
+            "change": shaped["price"] - shaped["prev_close"],
+            "change_percent": (
+                (shaped["price"] - shaped["prev_close"]) / shaped["prev_close"] * 100.0
+                if shaped["prev_close"] else 0.0
+            ),
+            "source": "finnhub",
+        }
 
     async def get_intraday_routed(self, symbol: str, db: AsyncSession, range_="1d", interval="5m"):
         """Intraday bars from connected broker (live) or Yahoo (delayed)."""
