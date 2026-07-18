@@ -1,7 +1,7 @@
 # Phase 0 — Build & Adversarial Review Record
 
 **Date:** 2026-06-10 · **Status:** Phase 0 exit criteria met.
-Companion to [docs/TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md) §16 (migration plan).
+Companion to [docs/ARCHITECTURE.md](ARCHITECTURE.md) §16 (migration plan).
 
 ## What Phase 0 delivers
 

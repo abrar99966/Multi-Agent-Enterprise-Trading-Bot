@@ -42,7 +42,7 @@ class LatencyTier:
     is_colo: bool = False
 
 
-# Pre-defined tiers from TARGET_ARCHITECTURE §12
+# Pre-defined tiers from ARCHITECTURE.md Part II §12
 TIERS: Dict[str, LatencyTier] = {
     "retail_api": LatencyTier(
         name="retail_api",

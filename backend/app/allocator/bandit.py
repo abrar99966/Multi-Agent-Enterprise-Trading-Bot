@@ -1,7 +1,7 @@
 """Thompson-Sampling bandit capital allocator.
 
 Formalises the strategy-tournament into a champion–challenger framework
-(TARGET_ARCHITECTURE §7.4, Phase 5). Each *arm* is a (strategy, param_hash)
+(ARCHITECTURE.md Part II §7.4, Phase 5). Each *arm* is a (strategy, param_hash)
 pair. The allocator maintains a Beta posterior per arm, updated by
 discretised reward signals derived from risk-adjusted returns, and outputs
 capital-fraction recommendations.

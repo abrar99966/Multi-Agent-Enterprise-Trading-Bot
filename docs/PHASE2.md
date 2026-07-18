@@ -1,7 +1,7 @@
 # Phase 2 — TCA, Autonomy Tiers, Backtest≡Replay Parity
 
 **Date:** 2026-06-10 · **Status:** complete · **154 tests pass.**
-Builds on [docs/PHASE1.md](PHASE1.md); plan in [docs/TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md) §7.3, §8.4, §16.
+Builds on [docs/PHASE1.md](PHASE1.md); plan in [docs/ARCHITECTURE.md](ARCHITECTURE.md) §7.3, §8.4, §16.
 
 ## What Phase 2 delivers
 

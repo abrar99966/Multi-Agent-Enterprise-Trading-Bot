@@ -6,7 +6,7 @@ try/except: an exception inside an agent's logic is swallowed and counted, not
 propagated to the bus dispatch loop. So a hung or crashing analyst (an LLM
 outage, a bad model output, a bug) is harmless -- trading continues on the
 last-known-good / TTL-decayed parameters, exactly as the design requires
-(docs/TARGET_ARCHITECTURE.md section 6: "the fast path never waits on the
+(docs/ARCHITECTURE.md section 6: "the fast path never waits on the
 slow path").
 
 Determinism note: the guard does not read the clock or randomize; on success

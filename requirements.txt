@@ -1,4 +1,4 @@
-# Phase 0 runtime (see docs/TARGET_ARCHITECTURE.md §16)
+# Phase 0 runtime (see docs/ARCHITECTURE.md §16)
 pydantic>=2.7
 pydantic-settings>=2.2
 httpx>=0.27
@@ -27,7 +27,7 @@ pytest>=8.0
 # - The native Anthropic provider needs the SDK only if you choose it:
 # anthropic>=0.40        # only for ETB_LLM_PROVIDER=anthropic
 
-# Removed by target-architecture decision (docs/TARGET_ARCHITECTURE.md §2):
+# Removed by target-architecture decision (docs/ARCHITECTURE.md §2):
 # chromadb  -> replaced by Qdrant/pgvector in the slow path (Phase 3)
 # langchain -> LLM agents are slow-path only, direct SDK calls (Phase 3)
 # sqlalchemy/asyncpg -> reintroduced with the OMS Postgres work (Phase 2+)

@@ -1,7 +1,7 @@
 """Bounded parameter controller -- the slow path's only write interface.
 
 Analysts emit ParameterChangeProposal events; this controller is the boundary
-that decides what actually changes (docs/TARGET_ARCHITECTURE.md section 6.2):
+that decides what actually changes (docs/ARCHITECTURE.md section 6.2):
 
 - Bounds: every parameter has [min, max] and a max step per change.
 - Direction asymmetry: a proposal that moves a parameter in its conservative

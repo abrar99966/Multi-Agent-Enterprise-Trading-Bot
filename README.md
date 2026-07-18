@@ -184,9 +184,9 @@ The platform is built on a **dual-speed architecture** — a deterministic fast 
 │   ├── docker-compose.yml      # Full stack (Postgres, Redpanda, QuestDB)
 │   └── .env.example            # Environment variable template
 ├── docs/                       # Detailed documentation
-│   ├── TARGET_ARCHITECTURE.md  # Institutional target-state design (50KB)
+│   ├── ARCHITECTURE.md         # Canonical architecture — single source of truth (Part I built + Part II target-state)
 │   ├── PHASE0_REVIEW.md - PHASE5_IMPLEMENTATION.md  # Phase docs
-│   └── architecture.md         # System architecture diagram
+│   └── PUBLIC_API_ENRICHMENT.md # Macro/symbology/data-failover enrichment
 ├── start.ps1                   # One-command startup script
 ├── requirements.txt            # Python dependencies
 └── USER_GUIDE.md               # Comprehensive user guide (49KB)
@@ -372,7 +372,7 @@ The platform was built following a phased approach, prioritizing **risk reductio
 | **Phase 4** | Multi-Broker & Execution — IBKR adapter, SOR, execution algos, surveillance | ✅ Complete |
 | **Phase 5** | Learning & Speed — bandit allocator, offline RL, hot-path profiler, DMA evaluator | ✅ Complete |
 
-See [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) for the full architectural design document.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full architecture — Part I (built today) and Part II (target-state design).
 
 ---
 
@@ -382,7 +382,6 @@ See [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) for the full ar
 |----------|-------------|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **Canonical architecture — single source of truth (built today + labeled target-state + status matrix). Start here.** |
 | [`USER_GUIDE.md`](USER_GUIDE.md) | Comprehensive page-by-page user guide (49KB) |
-| [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) | Target-state design deep-dive / roadmap appendix (not current state) |
 | [`docs/PHASE0_REVIEW.md`](docs/PHASE0_REVIEW.md) | Phase 0 — Truth & Safety review |
 | [`docs/PHASE1.md`](docs/PHASE1.md) | Phase 1 — Deterministic decisions |
 | [`docs/PHASE2.md`](docs/PHASE2.md) | Phase 2 — Measurement & parity |

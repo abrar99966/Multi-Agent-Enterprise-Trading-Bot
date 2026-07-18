@@ -7,7 +7,7 @@ indicator helpers and the SAME 9-strategy tournament that
 learns how to weight the existing strategy tournament plus a handful of raw
 indicator context features -- one indicator codebase, no train/live skew,
 and no skew between the tournament and the model. This formalizes the
-tournament into the deterministic fast path (docs/TARGET_ARCHITECTURE.md
+tournament into the deterministic fast path (docs/ARCHITECTURE.md
 section 7: "learn which strategy to trust").
 
 Causality: ``compute_features(bars)`` at index t reads only ``bars[:t+1]``.

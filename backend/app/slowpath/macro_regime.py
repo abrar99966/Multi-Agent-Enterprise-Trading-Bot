@@ -4,7 +4,7 @@ Reads real macro data -- the US Treasury yield curve (no key) and, when a FRED
 key is configured, the equity-implied-vol index (VIXCLS) -- and, on a macro
 STRESS reading, proposes a bounded TIGHTENING of gross exposure.
 
-Why this is safe by construction (docs/TARGET_ARCHITECTURE.md sections 5-6):
+Why this is safe by construction (docs/ARCHITECTURE.md sections 5-6):
   * It only ever proposes tightenings, which auto-apply. A misread can only make
     the system MORE conservative -- the fail-safe direction. It can never loosen
     and never emit an order.

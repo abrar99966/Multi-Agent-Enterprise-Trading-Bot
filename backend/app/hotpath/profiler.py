@@ -4,7 +4,7 @@ Instruments every stage of the tick-to-order pipeline and tracks p50/p99/p999
 latencies in nanosecond precision. This is the prerequisite for the "port to
 Rust + Aeron" decision: you can't optimise what you can't measure.
 
-Stages instrumented (TARGET_ARCHITECTURE §12 latency budget):
+Stages instrumented (ARCHITECTURE.md Part II §12 latency budget):
     1. FEED_DECODE     — venue → normalised bar/tick
     2. FEATURE_UPDATE  — bar → feature fabric computation
     3. INFERENCE        — features → model score
@@ -58,7 +58,7 @@ class Stage(str, Enum):
     TOTAL          = "total"
 
 
-# Latency targets from TARGET_ARCHITECTURE §12 (retail tier, in microseconds)
+# Latency targets from ARCHITECTURE.md Part II §12 (retail tier, in microseconds)
 RETAIL_TARGETS_US: Dict[Stage, float] = {
     Stage.FEED_DECODE:    500.0,     # 0.5 ms
     Stage.FEATURE_UPDATE: 1000.0,    # 1 ms

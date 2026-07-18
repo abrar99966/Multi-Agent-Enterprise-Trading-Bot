@@ -2,7 +2,7 @@
 
 **Status:** ✅ Complete
 **Date:** 2026-07-18
-**Architecture Reference:** [TARGET_ARCHITECTURE.md](./TARGET_ARCHITECTURE.md) §5–6 (slow path, parameter control)
+**Architecture Reference:** [ARCHITECTURE.md](./ARCHITECTURE.md) §5–6 (slow path, parameter control)
 **Scope:** Three free public data sources, confined to the slow path and product surface.
 
 ---

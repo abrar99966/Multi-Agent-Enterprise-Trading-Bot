@@ -2,7 +2,7 @@
 
 **Status:** ✅ Complete  
 **Date:** 2026-06-11  
-**Architecture Reference:** [TARGET_ARCHITECTURE.md](./TARGET_ARCHITECTURE.md) §16, Phase 5 (Weeks 33+)  
+**Architecture Reference:** [ARCHITECTURE.md](./ARCHITECTURE.md) §16, Phase 5 (Weeks 33+)  
 **Exit Criteria:** Challenger promotions only via §7.4 gate; internal p99 < 1ms; DMA go/no-go memo with measured alpha-vs-latency sensitivity.
 
 ---
@@ -250,7 +250,7 @@ GET  /api/v1/phase5/status               → Phase 5 component status + exit cri
 
 ## 8. Architecture Alignment
 
-Phase 5 delivers the components outlined in TARGET_ARCHITECTURE.md §16:
+Phase 5 delivers the components outlined in ARCHITECTURE.md §16:
 
 > **Phase 5 — Learning & speed (Weeks 33+):** Bandit capital allocator (formalizes the strategy-tournament into champion–challenger); offline-RL execution research in shadow; port feature/inference hot path to Rust + Aeron; evaluate DMA/colo economics.
 

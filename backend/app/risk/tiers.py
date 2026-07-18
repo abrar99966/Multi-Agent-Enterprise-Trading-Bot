@@ -1,4 +1,4 @@
-"""Autonomy-tier policy (docs/TARGET_ARCHITECTURE.md section 8.4).
+"""Autonomy-tier policy (docs/ARCHITECTURE.md section 8.4).
 
 Classifies a risk-APPROVED intent into an autonomy tier:
 

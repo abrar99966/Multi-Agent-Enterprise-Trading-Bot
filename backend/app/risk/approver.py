@@ -2,7 +2,7 @@
 
 In production, an ApprovalRequest goes to the dashboard: Tier 2 auto-executes
 on a timeout unless a human vetoes; Tier 3 needs an explicit human approval
-(docs/TARGET_ARCHITECTURE.md section 8.4). For deterministic backtests and the
+(docs/ARCHITECTURE.md section 8.4). For deterministic backtests and the
 paper harness there is no human, so AutoApprover stands in: it approves every
 request up to ``max_tier`` and rejects above it. Deterministic -- it reacts
 synchronously to each request with no clock or randomness -- so sessions still

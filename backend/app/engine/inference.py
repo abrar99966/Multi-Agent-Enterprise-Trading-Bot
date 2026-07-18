@@ -5,7 +5,7 @@ plus per-feature SHAP contributions (LightGBM ``pred_contrib``) for
 per-decision explainability. No wall clock, no RNG, no I/O on the hot path --
 given the artifact and the features, ``score`` is a pure function, so it
 preserves replay determinism. An LLM never sits here (or anywhere on the
-decision path); this is GBDT only (docs/TARGET_ARCHITECTURE.md section 5).
+decision path); this is GBDT only (docs/ARCHITECTURE.md section 5).
 """
 from __future__ import annotations
 

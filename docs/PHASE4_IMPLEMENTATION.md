@@ -2,7 +2,7 @@
 
 **Status:** ✅ Complete  
 **Date:** 2026-06-11  
-**Architecture Reference:** [TARGET_ARCHITECTURE.md](./TARGET_ARCHITECTURE.md) §16, Phase 4 (Weeks 25–32)  
+**Architecture Reference:** [ARCHITECTURE.md](./ARCHITECTURE.md) §16, Phase 4 (Weeks 25–32)  
 **Exit Criteria:** Execution slippage ≤ impact-model baseline; failover broker drill passed.
 
 ---
@@ -342,7 +342,7 @@ The IBKR adapter uses lazy imports — the platform runs fine without `ib_insync
 
 ## 9. Architecture Alignment
 
-Phase 4 delivers the components outlined in TARGET_ARCHITECTURE.md §16:
+Phase 4 delivers the components outlined in ARCHITECTURE.md §16:
 
 > **Phase 4 — Multi-broker & execution (Weeks 25–32):** IBKR integration; SOR v1; execution algos (IS/POV/adaptive); cross-broker reconciliation; surveillance detectors live.
 

@@ -7,7 +7,7 @@ ParameterChangeProposal. The model is the *source* of a proposal; it is fully
 contained by the ParameterController -- a bearish/high-severity read proposes a
 TIGHTENING (auto-applies, fail-safe), while a bullish read proposes a LOOSENING
 (held for human approval). The model can never emit an order or set a value
-directly (docs/TARGET_ARCHITECTURE.md sections 5-6).
+directly (docs/ARCHITECTURE.md sections 5-6).
 
 The model choice is pure configuration (which provider, which model) -- nothing
 here is wired to a specific vendor. This call is non-deterministic and external,

@@ -1,7 +1,7 @@
 # Local infrastructure (Phase 0)
 
 Single-host, dev-mode versions of the platform's durable services
-(docs/TARGET_ARCHITECTURE.md, sections 3, 11 and 16). **All of it is
+(docs/ARCHITECTURE.md, sections 3, 11 and 16). **All of it is
 optional in Phase 0** -- see [Running without any of this](#running-without-any-of-this-journal-only-mode).
 
 ## Quickstart

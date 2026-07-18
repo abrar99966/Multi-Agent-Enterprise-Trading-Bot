@@ -1,7 +1,7 @@
 # Phase 1 — Deterministic GBDT Fast Path + Risk Gateway v1
 
 **Date:** 2026-06-10 · **Status:** complete · **136 tests pass.**
-Builds on [docs/PHASE0_REVIEW.md](PHASE0_REVIEW.md); plan in [docs/TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md) §5, §7, §16.
+Builds on [docs/PHASE0_REVIEW.md](PHASE0_REVIEW.md); plan in [docs/ARCHITECTURE.md](ARCHITECTURE.md) §5, §7, §16.
 
 ## What Phase 1 delivers
 

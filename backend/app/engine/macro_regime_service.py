@@ -20,7 +20,7 @@ Each poll:
      human-set baseline (reverting to baseline is always safe, needs no approval).
   3. the bus is drained, applying whatever survived the controller's bounds.
 
-Safety (docs/TARGET_ARCHITECTURE.md sections 5-6): the analyst only ever proposes
+Safety (docs/ARCHITECTURE.md sections 5-6): the analyst only ever proposes
 tightenings, so a misread can only make the system MORE conservative. The
 controller is the sole boundary; nothing here can loosen a limit or emit an
 order. The service is opt-in (started via REST), never auto-run -- consistent

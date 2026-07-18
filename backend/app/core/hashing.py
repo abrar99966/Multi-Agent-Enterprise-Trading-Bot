@@ -29,7 +29,7 @@ verify against an independently retained tip ``(hash, count)`` -- see
 ``JournalWriter.tip`` and ``audit.chain.verify_journal(expected_*)`` --
 and, for true tamper-evidence, an HMAC/signature with a writer-held key
 or a checkpoint pushed to an append-only external sink (Phase 1+,
-docs/TARGET_ARCHITECTURE.md section 9). The co-located ``.head`` sidecar
+docs/ARCHITECTURE.md section 9). The co-located ``.head`` sidecar
 written on close gives truncation/forge detection only to readers that
 obtained the expected tip out of band.
 

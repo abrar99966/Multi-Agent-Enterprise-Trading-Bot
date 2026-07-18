@@ -1,7 +1,7 @@
 # Phase 3 — Slow Path: Bounded Parameter Control, Regime, LLM Analyst
 
 **Date:** 2026-06-10 · **Status:** complete · **173 tests pass.**
-Builds on [docs/PHASE2.md](PHASE2.md); plan in [docs/TARGET_ARCHITECTURE.md](TARGET_ARCHITECTURE.md) §6.
+Builds on [docs/PHASE2.md](PHASE2.md); plan in [docs/ARCHITECTURE.md](ARCHITECTURE.md) §6.
 
 ## What Phase 3 delivers
 
