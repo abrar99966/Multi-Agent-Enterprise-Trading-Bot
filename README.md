@@ -388,6 +388,9 @@ See [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) for the full ar
 | [`docs/PHASE3.md`](docs/PHASE3.md) | Phase 3 — Slow path & feeds |
 | [`docs/PHASE4_IMPLEMENTATION.md`](docs/PHASE4_IMPLEMENTATION.md) | Phase 4 — Multi-broker & execution |
 | [`docs/PHASE5_IMPLEMENTATION.md`](docs/PHASE5_IMPLEMENTATION.md) | Phase 5 — Learning & speed |
+| [`docs/LAYER6_DASHBOARDS.md`](docs/LAYER6_DASHBOARDS.md) | Layer 6 — Read-side dashboards |
+| [`docs/PUBLIC_API_ENRICHMENT.md`](docs/PUBLIC_API_ENRICHMENT.md) | Public-API enrichment — macro regime, symbology, market-data failover |
+| [`docs/API.md`](docs/API.md) | REST API reference |
 | [`docs/architecture.md`](docs/architecture.md) | System architecture diagram |
 | [`docs/deployment.md`](docs/deployment.md) | Deployment strategy |
 

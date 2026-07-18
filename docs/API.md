@@ -198,6 +198,31 @@ The market data service automatically routes requests:
 
 ---
 
+## Slow Path — Macro Enrichment & Symbology
+
+Public-API enrichment (free tiers). Slow-path / product-surface only — never on
+the deterministic fast path, order path, or replay. All key-optional; a blank key
+disables that source and returns empty (`.env`: `ETB_FRED_API_KEY`,
+`ETB_FINNHUB_API_KEY`, `ETB_OPENFIGI_API_KEY`). The US Treasury yield curve needs
+no key and is always on.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/slowpath/macro` | Live macro snapshot: Treasury 10Y-2Y yield curve + FRED VIX; classified regime + the tightening it would propose (read-only, tighten-only) |
+| `GET` | `/api/v1/slowpath/symbology/{ticker}?exch=IN` | Resolve a ticker to its broker-neutral OpenFIGI id (`exch`: IN, US). `404` on no mapping |
+| `GET` | `/api/v1/slowpath/macro/service/status` | Macro regime service: effective vs baseline risk limits, regime, polls, proposals |
+| `POST` | `/api/v1/slowpath/macro/service/start` | Start the always-on macro poll loop (opt-in; makes network calls) |
+| `POST` | `/api/v1/slowpath/macro/service/stop` | Stop the poll loop |
+| `POST` | `/api/v1/slowpath/macro/service/poll` | Run one macro poll now; returns the resulting status |
+| `POST` | `/api/v1/slowpath/macro/service/simulate?spread=&vix=` | What-if: drive one poll with a synthetic reading through the real bus + controller to observe the tightening (e.g. `spread=-0.6&vix=45` → crisis). Restores the live source after |
+| `GET` | `/api/v1/slowpath/enrichment/status` | Which enrichment sources are enabled (key presence) |
+
+Market-data quotes (`/api/v1/market-data/quotes/{symbol}`) gain a **Finnhub**
+failover tier between the connected broker and the Yahoo fallback: broker → Finnhub
+(when keyed) → Yahoo. The `source` field reports which served the quote.
+
+---
+
 ## Authentication (Stub)
 
 | Method | Endpoint | Description |
