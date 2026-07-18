@@ -225,6 +225,19 @@ sequenceDiagram
 
 The fast path never waits on any of this. If the entire slow path dies, trading continues under last-known-good (or TTL-decayed baseline) parameters.
 
+### 6.4 Implemented external data sources (public-API enrichment)
+
+The §6.1 "Macro analyst" and "Regime classifier" rows are realized today by concrete adapters over **free public APIs**, wired exactly through the §6.2 `ParameterChangeProposal` boundary. All are off the deterministic fast path (real wall clock, network), key-optional (blank key ⇒ source disabled, app unchanged), and fail-closed to empty — a macro outage changes nothing. See `docs/PUBLIC_API_ENRICHMENT.md`.
+
+| Source | Key | Adapter | Role |
+|---|---|---|---|
+| **US Treasury** daily par-yield curve | none | `services/macro_data.py` | 10Y-2Y spread; inversion = stress precursor |
+| **FRED** (Federal Reserve) | free | `services/macro_data.py` | VIXCLS implied vol + other series |
+| **OpenFIGI** (Bloomberg symbology) | keyless (key raises rate limit) | `services/openfigi_symbols.py` | broker-neutral FIGI id — removes cross-broker symbol skew |
+| **Finnhub** | free | `services/finnhub_provider.py` | market-data failover tier (broker→Finnhub→Yahoo) + news sentiment (analyst evidence) |
+
+The **macro regime analyst** (`slowpath/macro_regime.py`) fuses the curve spread + VIX into `{None, stress, crisis}` and — on stress — emits a **tighten-only** proposal on `risk.max_gross_exposure` (stress→60%, crisis→50% of baseline; capped at one `max_step_frac` so it applies from baseline in one poll, deeper cuts ratchet). It is the concrete macro counterpart to the pure-price `RegimeClassifier`, satisfying the §6.2 direction-asymmetry rule: it can only make the system more conservative. The **macro regime service** (`engine/macro_regime_service.py`) hosts it on a long-lived bus + `ParameterController` so proposals auto-apply and TTL-decay to baseline; opt-in, never auto-run. This is the ≥2-independent-signals path of §6.2 quorum (statistical price regime + external macro) made real.
+
 ---
 
 ## 7. RL System Design
@@ -401,6 +414,7 @@ A platform that trades its own book can still produce these patterns *accidental
 | Feature store (training-serving parity) | **Feast** (offline registry) + in-process fabric (online) | declarative parity between training data and live computation | Tecton (cost), homegrown registry | Feast's online store is too slow for µs serving — use it for *definitions/training*, serve from the in-process fabric |
 | Vector DB | **Qdrant** | HA, filtering, perf; replaces Chroma | pgvector (simpler, fine at small scale — acceptable interim), Weaviate, Milvus | one more service; slow path only |
 | LLMs (slow path) | Frontier API models (function-calling, structured output) | best reasoning per ₹; structured `Proposal` outputs | self-hosted Llama-class (data control vs quality gap) | API dependency tolerable — slow path is not availability-critical |
+| Macro / enrichment data (slow path) | **US Treasury** (yield curve, no key) + **FRED** (VIX) + **OpenFIGI** (symbology) + **Finnhub** (quotes/news) over httpx | free tiers; no extra deps; realizes the §6.1 macro/regime + symbology needs today | OpenBB SDK (heavier), paid vendors (Bloomberg/Refinitiv) | key-optional, fail-closed to empty; off the fast path — an outage changes nothing (§6.4) |
 | Orchestration (slow path + control plane) | **Kubernetes** (managed) | standard ops, autoscaling for analysts/training | Nomad (simpler, smaller ecosystem) | **never** for the hot path |
 | Hot-path hosts | **Pinned VMs / bare metal**, ap-south-1 (Mumbai) now; exchange colo at DMA stage | K8s scheduling/CNI jitter is poison for µs paths; CPU pinning, NUMA locality, busy-polling | K8s with static CPU manager (still net jitter) | manual ops for 2–3 boxes — acceptable |
 | IaC / deploy | Terraform + GitOps (Argo) for K8s; Ansible for hot hosts | reproducibility; auditable change history | — | — |
