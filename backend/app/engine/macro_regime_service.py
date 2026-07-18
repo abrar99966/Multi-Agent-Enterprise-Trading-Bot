@@ -42,6 +42,7 @@ from app.bus.memory import MemoryBus
 from app.core.clock import LiveClock
 from app.core.events import Bar, Streams
 from app.risk.limits import RiskLimits
+from app.services.macro_data import YieldCurvePoint
 from app.slowpath.macro_regime import MacroRegimeAnalyst
 from app.slowpath.params import ParameterController, default_risk_params
 
@@ -140,6 +141,35 @@ class MacroRegimeService:
         self._polls += 1
         self._last_poll_at = datetime.now(timezone.utc)
         return self.status
+
+    async def simulate_poll(self, spread: Optional[float],
+                            vix: Optional[float]) -> Dict[str, Any]:
+        """What-if: run ONE poll against a SYNTHETIC macro reading (given 10Y-2Y
+        spread and/or VIX) through the real bus + controller, then restore the
+        live data source. Applies a genuine tightening so the effect on effective
+        limits is observable -- for demos/ops, not a data source. The applied
+        override still decays via TTL / a later real poll.
+
+        A spread is modeled as a yield-curve point y10-y2 == spread (y2 anchored
+        at 0), so ``spread < 0`` is an inverted curve.
+        """
+        class _Sim:
+            async def latest_yield_curve(self_):
+                if spread is None:
+                    return None
+                return YieldCurvePoint(date="SIMULATED", y2=0.0, y10=spread)
+
+            async def latest_value(self_, series_id: str):
+                return vix
+
+        original = self.analyst._data
+        self.analyst._data = _Sim()
+        try:
+            status = await self.poll_once()
+        finally:
+            self.analyst._data = original  # always restore the live source
+        status["simulated"] = {"spread_10y_2y": spread, "vix": vix}
+        return status
 
     # -- read side -----------------------------------------------------
 

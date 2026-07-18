@@ -75,11 +75,13 @@ def test_parse_fred_json_drops_missing() -> None:
     assert [o["value"] for o in obs] == [31.5, 30.0]
 
 
-def test_fred_disabled_without_key_makes_no_network_call() -> None:
-    # Default settings have a blank FRED key -> disabled -> empty, no network.
-    assert macro_data.macro_data.fred_enabled is False
-    assert asyncio.run(macro_data.macro_data.fred_series("VIXCLS")) == []
-    assert asyncio.run(macro_data.macro_data.latest_value("VIXCLS")) is None
+def test_fred_disabled_without_key_makes_no_network_call(monkeypatch) -> None:
+    # Force a blank key (env var overrides .env) -> disabled -> empty, no network.
+    monkeypatch.setenv("ETB_FRED_API_KEY", "")
+    adapter = macro_data.MacroDataAdapter()
+    assert adapter.fred_enabled is False
+    assert asyncio.run(adapter.fred_series("VIXCLS")) == []
+    assert asyncio.run(adapter.latest_value("VIXCLS")) is None
 
 
 # --- macro regime classification (pure) --------------------------------------
@@ -270,13 +272,27 @@ def test_macro_service_ttl_reverts_to_baseline() -> None:
     assert gross["tightened"] is False
 
 
-def test_finnhub_disabled_without_key() -> None:
-    # Default settings have a blank Finnhub key -> disabled -> empty, no network.
-    assert finnhub_provider.finnhub.enabled is False
-    assert asyncio.run(finnhub_provider.finnhub.quote("AAPL")) is None
+def test_macro_service_simulate_tightens_then_restores_source() -> None:
+    from app.engine.macro_regime_service import MacroRegimeService
+    svc = MacroRegimeService(poll_interval_s=1, analyst_ttl_s=3600)
+    live_source = svc.analyst._data
+    # Synthetic crisis: deep inversion + high VIX.
+    status = asyncio.run(svc.simulate_poll(spread=-0.6, vix=45.0))
+    assert status["simulated"] == {"spread_10y_2y": -0.6, "vix": 45.0}
+    assert status["macro_regime"] == "crisis"
+    gross = status["limits"]["risk.max_gross_exposure"]
+    assert gross["effective"] < gross["baseline"]  # genuine tightening applied
+    # The live data source is restored (not left pointing at the sim).
+    assert svc.analyst._data is live_source
+
+
+def test_finnhub_disabled_without_key(monkeypatch) -> None:
+    # Force a blank key (env var overrides .env) -> disabled -> empty, no network.
+    monkeypatch.setenv("ETB_FINNHUB_API_KEY", "")
+    fh = finnhub_provider.FinnhubProvider()
+    assert fh.enabled is False
+    assert asyncio.run(fh.quote("AAPL")) is None
+    assert asyncio.run(fh.company_news("AAPL", "2026-07-01", "2026-07-16")) == []
     assert asyncio.run(
-        finnhub_provider.finnhub.company_news("AAPL", "2026-07-01", "2026-07-16")
-    ) == []
-    assert asyncio.run(
-        finnhub_provider.finnhub.news_sentiment("AAPL", "2026-07-01", "2026-07-16")
+        fh.news_sentiment("AAPL", "2026-07-01", "2026-07-16")
     ) == 0.0

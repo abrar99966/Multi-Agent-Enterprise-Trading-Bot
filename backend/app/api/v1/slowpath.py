@@ -174,6 +174,17 @@ async def macro_service_poll():
     return await macro_regime_service.poll_once()
 
 
+@router.post("/macro/service/simulate")
+async def macro_service_simulate(spread: float | None = None,
+                                 vix: float | None = None):
+    """What-if demo: drive ONE poll with a SYNTHETIC macro reading (10Y-2Y
+    ``spread`` and/or ``vix``) through the real bus + controller to observe the
+    tightening. Restores the live data source after. Example: spread=-0.6 &
+    vix=45 -> crisis -> gross exposure tightened. Tighten-only; never loosens."""
+    from app.engine.macro_regime_service import macro_regime_service
+    return await macro_regime_service.simulate_poll(spread, vix)
+
+
 @router.get("/enrichment/status")
 async def enrichment_status():
     """Which public-API enrichment sources are live (keys configured)."""
