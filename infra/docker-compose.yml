@@ -1,6 +1,6 @@
 # Local development infrastructure for the enterprise trading platform.
 #
-# Phase 0 (docs/TARGET_ARCHITECTURE.md, section 16): everything in this file
+# Phase 0 (docs/ARCHITECTURE.md, section 16): everything in this file
 # is OPTIONAL. The Python backend runs in journal-only mode (in-process bus +
 # hash-chained JSONL journal + SQLite bar store) with no containers at all.
 # See infra/README.md for quickstart, the ports table, and teardown.
