@@ -380,8 +380,9 @@ See [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) for the full ar
 
 | Document | Description |
 |----------|-------------|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **Canonical architecture — single source of truth (built today + labeled target-state + status matrix). Start here.** |
 | [`USER_GUIDE.md`](USER_GUIDE.md) | Comprehensive page-by-page user guide (49KB) |
-| [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) | Institutional target-state architecture (51KB) |
+| [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) | Target-state design deep-dive / roadmap appendix (not current state) |
 | [`docs/PHASE0_REVIEW.md`](docs/PHASE0_REVIEW.md) | Phase 0 — Truth & Safety review |
 | [`docs/PHASE1.md`](docs/PHASE1.md) | Phase 1 — Deterministic decisions |
 | [`docs/PHASE2.md`](docs/PHASE2.md) | Phase 2 — Measurement & parity |
@@ -391,7 +392,6 @@ See [`docs/TARGET_ARCHITECTURE.md`](docs/TARGET_ARCHITECTURE.md) for the full ar
 | [`docs/LAYER6_DASHBOARDS.md`](docs/LAYER6_DASHBOARDS.md) | Layer 6 — Read-side dashboards |
 | [`docs/PUBLIC_API_ENRICHMENT.md`](docs/PUBLIC_API_ENRICHMENT.md) | Public-API enrichment — macro regime, symbology, market-data failover |
 | [`docs/API.md`](docs/API.md) | REST API reference |
-| [`docs/architecture.md`](docs/architecture.md) | System architecture diagram |
 | [`docs/deployment.md`](docs/deployment.md) | Deployment strategy |
 
 ---

@@ -1,5 +1,12 @@
 # Institutional Target-State Architecture — Enterprise Trading Platform
 
+> ⚠️ **This is a design deep-dive / roadmap appendix — NOT a description of the
+> system as it exists today.** It describes the aspirational target-state
+> (Rust/Aeron/QuestDB/ClickHouse/Postgres/Qdrant/K8s), most of which is **not
+> built**. For what the application actually is and does today, read the canonical
+> [`ARCHITECTURE.md`](./ARCHITECTURE.md) first; it carries a built-vs-planned
+> status matrix. Where the two disagree about current state, ARCHITECTURE.md wins.
+
 **Status:** Design review draft v1.0 · 2026-06-10
 **Scope:** Complete architectural transformation of the Enterprise AI Trading Assistant into an institutional-grade autonomous trading platform.
 **Audience:** CTO / Head of Trading Technology review.
