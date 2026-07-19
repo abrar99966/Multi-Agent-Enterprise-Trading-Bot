@@ -101,6 +101,7 @@ export function squarify(items, rect) {
 /* ---- rendering ----------------------------------------------------------- */
 
 const VIEW_H = 260;
+const MIN_H = 120;   // below this the squarified tiles stop being readable
 const HEADER = 14; // sector caption band
 const GAP = 2;
 
@@ -125,11 +126,16 @@ export function ExposureTreemap({
   height = VIEW_H,
   className = '',
 }) {
-  const [wrapRef, { w: measuredW }] = useMeasure();
+  const [wrapRef, { w: measuredW, h: measuredH }] = useMeasure();
   const [hover, setHover] = useState(null); // { tile, x, y }
 
   const W = Math.max(120, measuredW || 0);
-  const H = height;
+  /* Fill the space the panel actually gives us. `height` is only a fallback for
+     the first paint (before ResizeObserver reports) and for hosts that place
+     this in an auto-height container. Sizing to a fixed constant is what made
+     the treemap paint over the panel below it when the row was shorter than the
+     constant. MIN_H keeps the squarify output legible in a very short row. */
+  const H = Math.max(MIN_H, measuredH || height);
 
   const tiles = useMemo(() => {
     const clean = items.filter((i) => Number(i.value) > 0);
@@ -184,10 +190,17 @@ export function ExposureTreemap({
     >
       {/* `relative` + non-scrolling: FloatingReadout is positioned against this
           box, so the panel body wrapping it must not scroll (see chartKit). */}
-      <div ref={wrapRef} className="relative w-full" style={{ height }}>
+      {/* h-full, not a fixed height: the wrapper has to adopt the panel body's
+          real height for useMeasure to report anything other than the constant
+          we passed in. minHeight keeps it usable in an auto-height host. */}
+      <div ref={wrapRef} className="relative h-full w-full" style={{ minHeight: MIN_H }}>
         <svg
           width="100%"
-          height={H}
+          // 100% rather than {H}px: a pixel height can exceed the wrapper by a
+          // frame's worth of measurement lag, which clips the bottom tile row.
+          // The viewBox still carries the layout coordinates, and because H IS
+          // the measured height the aspect matches, so nothing is distorted.
+          height="100%"
           viewBox={`0 0 ${W} ${H}`}
           role="img"
           aria-label={`Exposure treemap, ${leaves.length} positions totalling ${fmtCur(total, {

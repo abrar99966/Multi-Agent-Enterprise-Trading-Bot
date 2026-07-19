@@ -10,7 +10,7 @@
  * Nothing here fetches or formats domain data — it is pure geometry plus two
  * tiny React helpers.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState, Skeleton, cx } from '../../ui';
 
 /* ---- measurement --------------------------------------------------------- */
@@ -24,17 +24,41 @@ import { EmptyState, Skeleton, cx } from '../../ui';
  * that changes nothing does not re-render the chart.
  */
 export function useMeasure() {
-  const ref = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const roRef = useRef(null);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return undefined;
+  /* A CALLBACK ref, not an object ref.
+   *
+   * WHY: every chart here is wrapped in PanelState, which renders a skeleton
+   * while data loads and swaps in the real content afterwards. With an object
+   * ref + `[]`-deps effect, the effect ran once at mount — when the skeleton was
+   * showing and ref.current was still null — bailed out, and never re-ran when
+   * the measured node finally appeared. Width stayed 0 forever, every chart fell
+   * back to its minimum viewBox (160px), and the SVG then scaled that tiny
+   * viewBox to fit and CENTRED it: the charts rendered as a narrow band floating
+   * in the middle of an otherwise empty panel.
+   *
+   * A callback ref fires on every attach and detach, so the observer follows the
+   * node wherever it goes. */
+  const ref = useCallback((node) => {
+    if (roRef.current) {
+      roRef.current.disconnect();
+      roRef.current = null;
+    }
+    if (!node) return;
 
     if (typeof ResizeObserver === 'undefined') {
-      setSize({ w: el.clientWidth, h: el.clientHeight });
-      return undefined;
+      setSize({ w: node.clientWidth, h: node.clientHeight });
+      return;
     }
+
+    // Seed synchronously: the observer's first callback lands a frame later, and
+    // one frame at the fallback size is a visible flash of a mis-sized chart.
+    setSize((s) => {
+      const w = Math.round(node.clientWidth);
+      const h = Math.round(node.clientHeight);
+      return s.w === w && s.h === h ? s : { w, h };
+    });
 
     const ro = new ResizeObserver((entries) => {
       const r = entries[0] ? entries[0].contentRect : null;
@@ -43,8 +67,13 @@ export function useMeasure() {
       const h = Math.round(r.height);
       setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
     });
-    ro.observe(el);
-    return () => ro.disconnect();
+    ro.observe(node);
+    roRef.current = ro;
+  }, []);
+
+  // Detach on unmount — the callback ref handles node swaps, not teardown.
+  useEffect(() => () => {
+    if (roRef.current) roRef.current.disconnect();
   }, []);
 
   return [ref, size];

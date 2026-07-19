@@ -134,7 +134,11 @@ export function PanelBody({ children, className = '', pad = true, scroll = true 
       id={ctx?.bodyId}
       className={cx(
         'flex-1 min-h-0 min-w-0',
-        scroll && 'overflow-auto hx-scroll',
+        // A non-scrolling body still has to CLIP. Without this, a child sized in
+        // fixed pixels (a chart asked for 232px inside a 150px row) paints
+        // straight through the panel and over whatever sits below it. Panels
+        // must never bleed onto their siblings.
+        scroll ? 'overflow-auto hx-scroll' : 'overflow-hidden',
         pad && 'p-3',
         className,
       )}
