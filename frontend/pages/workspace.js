@@ -14,7 +14,7 @@
  * The legacy multi-page UI (pages/index.js and friends) is untouched and still
  * served at its own routes.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { WorkspaceProvider, useWorkspace } from '../lib/ws/store';
@@ -33,6 +33,10 @@ import { AnalyticsModule, LogsModule, ReplayModule, SettingsModule } from '../co
 import { CopilotPanel, ContextPanels } from '../components/ws/modules/copilot';
 import ConsoleDock from '../components/ws/modules/console';
 
+/** Opening instrument. The index is the cheapest symbol to resolve upstream and
+ *  is what a desk looks at first. */
+const DEFAULT_SYMBOL = 'NIFTY';
+
 function Workspace() {
   const ws = useWorkspace();
   useHotkeys(ws);
@@ -42,6 +46,16 @@ function Workspace() {
   // the desk to context the operator has forgotten choosing.
   const [strategyId, setStrategyId] = useState(null);
   const [seedPrompt, setSeedPrompt] = useState(null);
+
+  /* Seed a symbol on first paint. Selection is intentionally not persisted, so
+     without this the chart, order book and context tabs all open empty — the
+     centre of the desk would be a void until the operator clicks something.
+     Done in an effect (never during render) to keep the server and client HTML
+     identical. */
+  useEffect(() => {
+    if (!ws.symbol) ws.selectSymbol(DEFAULT_SYMBOL);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectSymbol = useCallback(
     (sym) => {
@@ -93,10 +107,11 @@ function Workspace() {
             symbols={ws.symbols}
             onSymbolsChange={ws.setSymbols}
             chartSlot={chartSlot}
+            className="h-full"
           />
         );
       case 'portfolio':
-        return <PortfolioModule selectedSymbol={ws.symbol} onSelectSymbol={selectSymbol} />;
+        return <PortfolioModule selectedSymbol={ws.symbol} onSelectSymbol={selectSymbol} className="h-full" />;
       case 'orders':
         return <OrdersModule symbol={ws.symbol} onSelectSymbol={selectSymbol} log={ws.log} />;
       case 'strategies':
@@ -110,7 +125,7 @@ function Workspace() {
       case 'learning':
         return <LearningModule log={ws.log} />;
       case 'analytics':
-        return <AnalyticsModule db={ws.db} onDbChange={ws.setDb} onSelectSymbol={selectSymbol} />;
+        return <AnalyticsModule db={ws.db} onDbChange={ws.setDb} onSelectSymbol={selectSymbol} className="h-full" />;
       case 'copilot':
         // Full-width Copilot for long-form work; the dock keeps its own instance
         // so a conversation started here is not lost when the module changes.
@@ -124,9 +139,9 @@ function Workspace() {
       case 'risk':
         return <RiskModule log={ws.log} />;
       case 'replay':
-        return <ReplayModule journal={ws.journal} onJournalChange={ws.setJournal} />;
+        return <ReplayModule journal={ws.journal} onJournalChange={ws.setJournal} className="h-full" />;
       case 'logs':
-        return <LogsModule journal={ws.journal} onJournalChange={ws.setJournal} />;
+        return <LogsModule journal={ws.journal} onJournalChange={ws.setJournal} className="h-full" />;
       case 'settings':
         return (
           <SettingsModule
@@ -134,6 +149,7 @@ function Workspace() {
             onSectionChange={ws.setSettingsSection}
             appearance={ws.appearance}
             onAppearanceChange={ws.setAppearance}
+            className="h-full"
           />
         );
       default:

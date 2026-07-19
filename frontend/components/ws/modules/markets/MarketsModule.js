@@ -161,14 +161,23 @@ export function MarketsModule({
      a successful poll of a closed market is stale data, and saying "live" there
      would be a lie. */
   const newestTs = useMemo(() => freshestTs(quotes), [quotes]);
+  /* The first watchlist fetch can take >10s (the backend resolves each symbol
+     upstream), so "no quotes yet" must read as *connecting*, not as an outage —
+     showing Offline while a request is still in flight is a false alarm. */
   const feedStatus = error && !quotes.length
     ? 'error'
-    : newestTs != null && Date.now() - newestTs > STALE_MS
-      ? 'stale'
-      : quotes.length
-        ? 'live'
-        : 'offline';
-  const feedDetail = newestTs != null ? fmtTime(newestTs) : undefined;
+    : loading && !quotes.length
+      ? 'paused'
+      : newestTs != null && Date.now() - newestTs > STALE_MS
+        ? 'stale'
+        : quotes.length
+          ? 'live'
+          : 'offline';
+  const feedDetail = loading && !quotes.length
+    ? 'loading quotes…'
+    : newestTs != null
+      ? fmtTime(newestTs)
+      : undefined;
 
   return (
     <div className={`flex flex-col min-h-0 gap-2 ${className}`}>

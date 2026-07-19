@@ -206,7 +206,9 @@ export function DataGrid({
     <div className={cx('flex flex-col min-h-0 min-w-0', className)}>
       {showToolbar && (
         <div className="flex items-center justify-between gap-2 px-2 py-1 shrink-0 border-b border-hx-border-subtle">
-          <div className="flex items-center gap-1.5 min-w-0">{toolbar}</div>
+          {/* wrap: in a narrow column (e.g. the 380px watchlist) custom toolbar
+              controls would otherwise collide with the built-in buttons */}
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">{toolbar}</div>
           <div className="flex items-center gap-1 shrink-0">
             {columnChooser && (
               <ColumnChooser

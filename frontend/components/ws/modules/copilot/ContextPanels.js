@@ -254,7 +254,11 @@ export function ContextPanels({ symbol, strategyId }) {
 
   return (
     <Panel flush className="flex h-full min-h-0 flex-col rounded-none border-0 border-t border-hx-border-subtle">
-      <Tabs tabs={TABS} value={tab} onChange={setTab} idPrefix="ctx" />
+      {/* Six tabs don't fit a 372px dock at every width, and a clipped final tab
+          reads as a rendering bug. Scroll the strip instead of truncating it. */}
+      <div className="hx-scroll shrink-0 overflow-x-auto">
+        <Tabs tabs={TABS} value={tab} onChange={setTab} idPrefix="ctx" />
+      </div>
       <PanelBody className="hx-scroll min-h-0 flex-1 overflow-y-auto p-3">{body}</PanelBody>
     </Panel>
   );
