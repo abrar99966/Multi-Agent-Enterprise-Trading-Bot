@@ -12,23 +12,45 @@
  * the close rather than dropping the bar.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fmtNum, fmtTime } from '../../ui';
+import { BG_HEX, TEXT_HEX, TONE_HEX, fmtNum, fmtTime } from '../../ui';
 
 const PAD = { l: 8, r: 62, t: 8, b: 20 };
 const VOL_FRAC = 0.18; // share of plot height given to the volume pane
+
+/** hex → rgba(). Canvas has no opacity modifier, so tinted fills are derived
+    from the tokens above rather than kept as a second hardcoded copy. */
+function rgba(hex, a = 1) {
+  const h = String(hex || '').replace('#', '');
+  if (h.length !== 6) return `rgba(125,136,153,${a})`;
+  const n = parseInt(h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/* Every colour resolves through the design tokens: a re-skin of tokens.js has
+   to reach the price surface too. VWAP takes `info` (blue) — there is no
+   violet in the palette — and is dashed so it stays separable from EMA21's
+   cyan without relying on hue. */
 const COLORS = {
-  up: '#34d399',
-  down: '#f87171',
-  upFill: 'rgba(52,211,153,0.75)',
-  downFill: 'rgba(248,113,113,0.75)',
+  up: TONE_HEX.pos,
+  down: TONE_HEX.neg,
+  upFill: rgba(TONE_HEX.pos, 0.75),
+  downFill: rgba(TONE_HEX.neg, 0.75),
+  upVol: rgba(TONE_HEX.pos, 0.22),
+  downVol: rgba(TONE_HEX.neg, 0.22),
   grid: 'rgba(255,255,255,0.05)',
-  axis: '#565f70',
-  text: '#a8b3c7',
-  cross: 'rgba(34,211,238,0.55)',
-  ema9: '#fbbf24',
-  ema21: '#22d3ee',
-  vwap: '#a78bfa',
+  axis: TEXT_HEX.dim,
+  text: TEXT_HEX.mid,
+  cross: rgba(TONE_HEX.accent, 0.55),
+  ema9: TONE_HEX.warn,
+  ema21: TONE_HEX.accent,
+  vwap: TONE_HEX.info,
+  tagText: BG_HEX.sunken, // knocked-out label on the solid last-price tag
+  readout: BG_HEX.overlay,
 };
+
+/** Dash pattern for the VWAP stroke — the non-colour channel that separates it
+    from the two solid EMAs. Mirrored by the legend swatch. */
+const VWAP_DASH = [4, 3];
 
 /** Exponential moving average over closes; nulls carry the previous value. */
 function ema(values, period) {
@@ -196,7 +218,7 @@ export function CandleChart({
       const l = b.l ?? b.c;
 
       if (b.v) {
-        g.fillStyle = up ? 'rgba(52,211,153,0.22)' : 'rgba(248,113,113,0.22)';
+        g.fillStyle = up ? COLORS.upVol : COLORS.downVol;
         const vy = scale.vy(b.v);
         g.fillRect(x - bodyW / 2, vy, bodyW, volTop + volH - vy);
       }
@@ -217,10 +239,11 @@ export function CandleChart({
 
     // overlays — drawn from the absolute series so they don't restart at the
     // window edge, then clipped to the visible slice.
-    const line = (vals, color) => {
+    const line = (vals, color, dash = null) => {
       if (!vals) return;
       g.strokeStyle = color;
       g.lineWidth = 1.25;
+      if (dash) g.setLineDash(dash);
       g.beginPath();
       let started = false;
       for (let i = 0; i < visible.length; i += 1) {
@@ -234,9 +257,10 @@ export function CandleChart({
         } else g.lineTo(x, y);
       }
       g.stroke();
+      if (dash) g.setLineDash([]);
       g.lineWidth = 1;
     };
-    line(ind.vwap, COLORS.vwap);
+    line(ind.vwap, COLORS.vwap, VWAP_DASH);
     line(ind.ema21, COLORS.ema21);
     line(ind.ema9, COLORS.ema9);
 
@@ -247,7 +271,7 @@ export function CandleChart({
       const up = last.c >= (last.o ?? last.c);
       g.fillStyle = up ? COLORS.up : COLORS.down;
       g.fillRect(PAD.l + scale.w + 2, y - 8, PAD.r - 6, 16);
-      g.fillStyle = '#04060c';
+      g.fillStyle = COLORS.tagText;
       g.textAlign = 'left';
       g.fillText(fmtNum(last.c), PAD.l + scale.w + 6, y);
     }
@@ -259,7 +283,13 @@ export function CandleChart({
       const x = scale.x(idx);
       const y = m.price != null ? scale.y(m.price) : scale.y(visible[idx].c);
       const tone =
-        m.tone === 'pos' ? COLORS.up : m.tone === 'neg' ? COLORS.down : m.tone === 'warn' ? '#fbbf24' : '#22d3ee';
+        m.tone === 'pos'
+          ? COLORS.up
+          : m.tone === 'neg'
+            ? COLORS.down
+            : m.tone === 'warn'
+              ? TONE_HEX.warn
+              : TONE_HEX.accent;
       g.fillStyle = tone;
       g.beginPath();
       const s = 5;
@@ -290,7 +320,7 @@ export function CandleChart({
       g.setLineDash([]);
 
       const p = lo + ((PAD.t + priceH - hover.y) / priceH) * (hi - lo);
-      g.fillStyle = '#121926';
+      g.fillStyle = COLORS.readout;
       g.fillRect(PAD.l + scale.w + 2, hover.y - 8, PAD.r - 6, 16);
       g.fillStyle = COLORS.text;
       g.textAlign = 'left';
@@ -428,9 +458,26 @@ export function CandleChart({
         ) : (
           <span className="text-hx-text-dim">Scroll to zoom · drag to pan</span>
         )}
-        {overlays.ema9 && <span style={{ color: COLORS.ema9 }}>EMA9</span>}
-        {overlays.ema21 && <span style={{ color: COLORS.ema21 }}>EMA21</span>}
-        {overlays.vwap && <span style={{ color: COLORS.vwap }}>VWAP</span>}
+        {/* Each swatch rule mirrors its canvas stroke (VWAP dashed, EMAs solid),
+            so an overlay can be matched to its line without relying on hue. */}
+        {overlays.ema9 && (
+          <span className="flex items-center gap-1" style={{ color: COLORS.ema9 }}>
+            <span aria-hidden className="inline-block w-3 border-t border-solid" style={{ borderColor: COLORS.ema9 }} />
+            EMA9
+          </span>
+        )}
+        {overlays.ema21 && (
+          <span className="flex items-center gap-1" style={{ color: COLORS.ema21 }}>
+            <span aria-hidden className="inline-block w-3 border-t border-solid" style={{ borderColor: COLORS.ema21 }} />
+            EMA21
+          </span>
+        )}
+        {overlays.vwap && (
+          <span className="flex items-center gap-1" style={{ color: COLORS.vwap }}>
+            <span aria-hidden className="inline-block w-3 border-t border-dashed" style={{ borderColor: COLORS.vwap }} />
+            VWAP
+          </span>
+        )}
       </div>
     </div>
   );

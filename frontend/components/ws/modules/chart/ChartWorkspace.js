@@ -46,7 +46,9 @@ function ToolbarToggle({ active, onClick, children, title }) {
         'hx-focus rounded px-1.5 py-0.5 text-hx-10 font-medium transition-colors',
         active
           ? 'bg-hx-accent-500/15 text-hx-accent-300'
-          : 'text-hx-text-dim hover:bg-white/5 hover:text-hx-text-mid',
+          // `lo` (5.4:1), not `dim` (3.1:1) — these are 10px text controls, and
+          // dim is AA only at >=18.66px or for chrome. Matches ButtonGroup.
+          : 'text-hx-text-lo hover:bg-white/[0.05] hover:text-hx-text-hi',
       )}
     >
       {children}

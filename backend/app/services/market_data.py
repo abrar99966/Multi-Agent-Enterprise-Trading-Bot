@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Optional
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,11 +62,36 @@ def normalize_symbol(symbol):
 
 class MarketDataService:
     BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-    _QUOTE_TTL = 10.0  # seconds — short cache so polling tabs don't re-hit Yahoo every cycle
+    _QUOTE_TTL = 10.0  # seconds — fresh window; a hit inside this is returned as-is
+
+    # Stale-while-revalidate window. Past _QUOTE_TTL but inside this, the cached
+    # quote is returned IMMEDIATELY and a refresh runs in the background.
+    #
+    # WHY: upstream throttles ~10 concurrent quote requests from one IP, so a
+    # cold 10-symbol watchlist costs 8-16s wall-clock. Making the desk block on
+    # that is the wrong trade — an operator would rather see a 20-second-old
+    # price now than a spinner for eight seconds. Freshness is not lost, only
+    # deferred: the very next poll serves the refreshed value, and every quote
+    # carries its own `timestamp` so the UI can label a stale feed honestly.
+    _QUOTE_STALE_TTL = 180.0
+
+    # Cap on concurrent upstream fetches. Above roughly this, the provider
+    # queues us and every request gets slower — more concurrency buys nothing.
+    _FETCH_CONCURRENCY = 6
 
     def __init__(self):
         self._quote_cache: dict = {}   # symbol -> (monotonic_ts, quote_dict)
         self._resolved: dict = {}      # input symbol -> working Yahoo symbol (avoids repeat 404s)
+        self._inflight: dict = {}      # symbol -> asyncio.Task, so N callers share one fetch
+        self._fetch_sem: Optional[asyncio.Semaphore] = None
+        self._http: Optional[httpx.AsyncClient] = None  # shared pooled client
+
+    def _sem(self):
+        """Created lazily: a Semaphore binds to the running loop, and this
+        service is constructed at import time, before the loop exists."""
+        if self._fetch_sem is None:
+            self._fetch_sem = asyncio.Semaphore(self._FETCH_CONCURRENCY)
+        return self._fetch_sem
 
     def _candidates(self, symbol):
         """Yahoo symbols to try, best-guess first. NSE equities need a `.NS` suffix,
@@ -86,32 +112,96 @@ class MarketDataService:
                 seen.add(x); uniq.append(x)
         return uniq
 
+    def _client(self):
+        """One shared AsyncClient for the whole process.
+
+        WHY: constructing an AsyncClient builds a fresh SSLContext, which is
+        synchronous CPU work on the event loop. Doing that per quote meant a
+        10-symbol refresh blocked the loop long enough to add ~2s to every
+        watchlist response even when every quote was served from cache. One
+        pooled client also keeps connections alive, so revalidation reuses an
+        established TLS session instead of re-handshaking.
+        """
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(
+                timeout=10,
+                headers={"User-Agent": "Mozilla/5.0 TradingBot"},
+                limits=httpx.Limits(max_connections=16, max_keepalive_connections=8),
+            )
+        return self._http
+
+    async def aclose(self):
+        """Release the pooled client (shutdown hook / tests)."""
+        if self._http is not None and not self._http.is_closed:
+            await self._http.aclose()
+        self._http = None
+
     async def _fetch(self, symbol, range_, interval):
         params = {"range": range_, "interval": interval, "includePrePost": "false"}
-        headers = {"User-Agent": "Mozilla/5.0 TradingBot"}
         last_exc = None
-        async with httpx.AsyncClient(timeout=10, headers=headers) as client:
-            for ysym in self._candidates(symbol):
-                try:
-                    response = await client.get(self.BASE_URL.format(symbol=ysym), params=params)
-                    response.raise_for_status()
-                    self._resolved[(symbol or "").upper()] = ysym   # remember the form that worked
-                    return response.json()
-                except httpx.HTTPStatusError as exc:
-                    if exc.response.status_code in (404, 422):
-                        last_exc = exc
-                        continue   # try the next candidate (e.g. add .NS)
-                    raise
+        client = self._client()
+        for ysym in self._candidates(symbol):
+            try:
+                response = await client.get(self.BASE_URL.format(symbol=ysym), params=params)
+                response.raise_for_status()
+                self._resolved[(symbol or "").upper()] = ysym   # remember the form that worked
+                return response.json()
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (404, 422):
+                    last_exc = exc
+                    continue   # try the next candidate (e.g. add .NS)
+                raise
         raise last_exc
 
     async def get_quote(self, symbol):
+        """Quote for a symbol, cached with stale-while-revalidate.
+
+        Fresh hit  -> returned directly.
+        Stale hit  -> returned immediately, refresh kicked off in the background.
+        Cold miss  -> awaited (nothing better to serve).
+        """
         import time
         key = (symbol or "").upper()
         now = time.monotonic()
         cached = self._quote_cache.get(key)
-        if cached and now - cached[0] < self._QUOTE_TTL:
-            return dict(cached[1])
-        payload = await self._fetch(symbol, "1d", "1m")
+        if cached:
+            age = now - cached[0]
+            if age < self._QUOTE_TTL:
+                return dict(cached[1])
+            if age < self._QUOTE_STALE_TTL:
+                self._revalidate(symbol, key)
+                return dict(cached[1])
+        return await self._fetch_quote(symbol, key)
+
+    def _revalidate(self, symbol, key):
+        """Kick a background refresh, at most one per symbol in flight.
+
+        Failures are swallowed deliberately: the caller has already been served
+        a usable quote, and a background refresh that raises must not surface as
+        an unhandled task exception.
+        """
+        task = self._inflight.get(key)
+        if task and not task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return  # no loop (sync context) — skip; the next call refreshes
+        t = loop.create_task(self._refresh_quiet(symbol, key))
+        self._inflight[key] = t
+        t.add_done_callback(lambda _t, k=key: self._inflight.pop(k, None))
+
+    async def _refresh_quiet(self, symbol, key):
+        try:
+            await self._fetch_quote(symbol, key)
+        except Exception as exc:
+            log.debug("Background quote refresh failed for %s: %s", symbol, exc)
+
+    async def _fetch_quote(self, symbol, key):
+        import time
+        now = time.monotonic()
+        async with self._sem():
+            payload = await self._fetch(symbol, "1d", "1m")
         chart = payload.get("chart", {}).get("result")
         if not chart:
             raise ValueError("No chart data for " + symbol)

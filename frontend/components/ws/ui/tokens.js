@@ -71,6 +71,23 @@ export const TONE_HEX = {
   info: '#60a5fa',
 };
 
+/** Text ramp as raw hex — same rationale as TONE_HEX, for canvas/SVG call
+    sites. Mirrors `hx.text` in tailwind.config.js; keep the two in step. */
+export const TEXT_HEX = {
+  hi: '#f2f5fa',
+  mid: '#a8b3c7',
+  lo: '#7d8899',
+  dim: '#565f70',
+};
+
+/** Surface ramp as raw hex, for canvas fills. Mirrors `hx.bg`. */
+export const BG_HEX = {
+  sunken: '#04060c',
+  base: '#070a12',
+  raised: '#0c111c',
+  overlay: '#121926',
+};
+
 /* ---- Severity ------------------------------------------------------------
    Risk/alert severity is a domain concept; tone is a visual one. Keep them
    separate so a severity can be re-skinned without touching call sites. */
@@ -181,16 +198,33 @@ export function fmtQty(v, { signed = false } = {}) {
   return fmtNum(n, { dp: Number.isInteger(n) ? 0 : 2, compact: Math.abs(n) >= 1e6, signed });
 }
 
+/** Zone-bearing ISO: ends in Z/z, or ±HH:MM / ±HHMM. */
+const HAS_ZONE = /([zZ]|[+-]\d{2}:?\d{2})$/;
+
 /**
  * Timestamp → "14:32:07". Accepts epoch ms, epoch seconds, ISO string, or Date.
  * `mode`: 'time' | 'hm' | 'date' | 'datetime' | 'rel'.
+ *
+ * NAIVE-UTC CONTRACT: this backend serialises datetimes without a zone suffix
+ * ("2026-07-19T13:44:02"). JS reads a zone-less datetime as LOCAL time, which
+ * silently shifts every rendered timestamp by the viewer's UTC offset — a
+ * 5.5-hour error in IST, on order timestamps and risk-limit resets. A 'Z' is
+ * appended when no zone is present so the value is read as the UTC it is.
+ * (lib/ws/api.js exports parseUtc with identical semantics for callers outside
+ * this layer; the rule is duplicated rather than imported because ui/ imports
+ * nothing but React.)
  */
 export function fmtTime(v, { mode = 'time' } = {}) {
   if (isNil(v)) return EMPTY;
   let d;
   if (v instanceof Date) d = v;
   else if (typeof v === 'number') d = new Date(v < 1e11 ? v * 1000 : v); // seconds vs ms
-  else d = new Date(v);
+  else {
+    const s = String(v);
+    // Date-only strings ("2026-07-19") are already parsed as UTC by spec.
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
+    d = new Date(HAS_ZONE.test(s) || dateOnly ? s : `${s}Z`);
+  }
   if (Number.isNaN(d.getTime())) return EMPTY;
 
   const p2 = (x) => String(x).padStart(2, '0');
