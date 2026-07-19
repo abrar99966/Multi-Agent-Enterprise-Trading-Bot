@@ -59,9 +59,11 @@ function Workspace() {
 
   const selectSymbol = useCallback(
     (sym) => {
-      if (!sym) return;
+      // Deselection (null) is a real, supported transition — modules toggle the
+      // active row off and drop selection when a symbol leaves the universe.
+      // Only the log line is skipped for it, never the state write.
       ws.selectSymbol(sym);
-      ws.log('info', `Selected ${sym}`);
+      if (sym) ws.log('info', `Selected ${sym}`);
     },
     [ws],
   );
@@ -159,7 +161,7 @@ function Workspace() {
 
   return (
     <div
-      className="flex h-screen w-screen flex-col overflow-hidden bg-hx-bg-base text-hx-text-hi antialiased"
+      className="hx-root flex h-screen w-screen flex-col overflow-hidden bg-hx-bg-base text-hx-text-hi antialiased"
       style={{ fontSize: `${(ws.appearance?.fontScale || 100) / 100 * 13}px` }}
     >
       <TopBar

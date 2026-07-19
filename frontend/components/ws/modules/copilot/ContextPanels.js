@@ -39,7 +39,7 @@ function Row({ label, value, tone }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1">
       <span className="text-hx-11 text-hx-text-lo">{label}</span>
-      <span className={cx('font-hx-mono text-hx-11 tabular-nums', tone ? TONE_TEXT[tone] : 'text-hx-text-hi')}>
+      <span className={cx('hx-mono text-hx-11 tabular-nums', tone ? TONE_TEXT[tone] : 'text-hx-text-hi')}>
         {value}
       </span>
     </div>
@@ -89,13 +89,15 @@ function InsightsTab({ symbol }) {
         <h4 className="mb-1 text-hx-10 uppercase tracking-wider text-hx-text-dim">Signal quality</h4>
         <Row label="Hit rate 1h" value={fmtPct(stats?.hit_rate_1h, { asRatio: true, signed: false })} />
         <Row label="Hit rate 24h" value={fmtPct(stats?.hit_rate_24h, { asRatio: true, signed: false })} />
-        <Row label="Expectancy 1h" value={fmtPct(stats?.expectancy_1h, { asRatio: true })} tone={deltaTone(stats?.expectancy_1h)} />
+        {/* expectancy_1h is derived from actual_move_pct_1h — already a percentage,
+            so it must not be scaled again like the 0..1 hit rates above. */}
+        <Row label="Expectancy 1h" value={fmtPct(stats?.expectancy_1h, { asRatio: false })} tone={deltaTone(stats?.expectancy_1h)} />
         <Row label="Graded" value={fmtNum(stats?.graded_count, { dp: 0 })} />
         {symbol && stats?.per_symbol?.[symbol] && (
           <>
             <h4 className="mb-1 mt-2 text-hx-10 uppercase tracking-wider text-hx-text-dim">{symbol}</h4>
             <Row label="Signals" value={fmtNum(stats.per_symbol[symbol].total, { dp: 0 })} />
-            <Row label="Hit rate" value={fmtPct(stats.per_symbol[symbol].hit_rate, { asRatio: true, signed: false })} />
+            <Row label="Hit rate" value={fmtPct(stats.per_symbol[symbol].hit_rate_1h, { asRatio: true, signed: false })} />
             <Row label="Avg move" value={fmtPct(stats.per_symbol[symbol].avg_move_pct, { asRatio: false })} />
           </>
         )}
@@ -224,8 +226,8 @@ function ExposureTab() {
       {positions.slice(0, 10).map((p) => (
         <div key={p.symbol}>
           <div className="flex items-baseline justify-between">
-            <span className="font-hx-mono text-hx-11 text-hx-text-hi">{p.symbol}</span>
-            <span className="font-hx-mono text-hx-11 text-hx-text-mid">
+            <span className="hx-mono text-hx-11 text-hx-text-hi">{p.symbol}</span>
+            <span className="hx-mono text-hx-11 text-hx-text-mid">
               {fmtCur(p.notional, { ccy: 'INR', compact: true })}
             </span>
           </div>

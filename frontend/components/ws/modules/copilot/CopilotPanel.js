@@ -121,7 +121,7 @@ function Message({ msg }) {
               Reasoning trace
             </button>
             {traceOpen && (
-              <pre className="hx-scroll mt-1 max-h-40 overflow-auto rounded border border-hx-border-subtle bg-hx-bg-sunken p-2 font-hx-mono text-hx-10 text-hx-text-lo">
+              <pre className="hx-scroll mt-1 max-h-40 overflow-auto rounded border border-hx-border-subtle bg-hx-bg-sunken p-2 hx-mono text-hx-10 text-hx-text-lo">
                 {typeof msg.meta.reasoning === 'string'
                   ? msg.meta.reasoning
                   : JSON.stringify(msg.meta.reasoning, null, 2)}
@@ -135,7 +135,7 @@ function Message({ msg }) {
             {msg.meta.sources.slice(0, 6).map((s, i) => (
               <li
                 key={i}
-                className="rounded border border-hx-border-subtle bg-hx-bg-sunken px-1.5 py-0.5 font-hx-mono text-hx-10 text-hx-text-dim"
+                className="rounded border border-hx-border-subtle bg-hx-bg-sunken px-1.5 py-0.5 hx-mono text-hx-10 text-hx-text-dim"
               >
                 {typeof s === 'string' ? s : s.id || s.title || 'source'}
               </li>
@@ -170,6 +170,8 @@ export function CopilotPanel({ symbol, strategyId, seedPrompt, onSeedConsumed })
     async (text) => {
       const q = (text ?? '').trim();
       if (!q || busy) return;
+      // Same string the header advertises as the active context.
+      const ctx = [symbol, strategyId].filter(Boolean).join(' · ');
 
       setMessages((m) => m.concat({ id: ++seq.current, role: 'user', text: q, at: Date.now() }));
       setDraft('');
@@ -184,8 +186,17 @@ export function CopilotPanel({ symbol, strategyId, seedPrompt, onSeedConsumed })
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           // Context travels with the question so the answer is scoped to what
-          // the desk is looking at, not to whatever the model last saw.
-          body: JSON.stringify({ message: q, symbol: symbol || null, strategy: strategyId || null }),
+          // the desk is looking at, not to whatever the model last saw. ChatRequest
+          // declares only `message` and `history` — sibling `symbol`/`strategy`
+          // keys are dropped by Pydantic, and the backend re-derives the symbol by
+          // scanning the prose, so the selection has to ride inside the message.
+          body: JSON.stringify({
+            message: ctx ? `[${ctx}] ${q}` : q,
+            history: messages
+              .filter((m) => !m.error && m.text)
+              .slice(-20)
+              .map((m) => ({ role: m.role, content: m.text })),
+          }),
           signal: ctrl.signal,
         });
         const raw = await res.text();
@@ -223,7 +234,7 @@ export function CopilotPanel({ symbol, strategyId, seedPrompt, onSeedConsumed })
         setBusy(false);
       }
     },
-    [busy, symbol, strategyId],
+    [busy, symbol, strategyId, messages],
   );
 
   // A module can push a question in (e.g. "Explain this strategy").

@@ -10,7 +10,7 @@ import { Icon } from '../ui';
 
 function KeyCap({ children }) {
   return (
-    <kbd className="inline-flex min-w-[20px] items-center justify-center rounded border border-hx-border-strong bg-hx-bg-overlay px-1.5 py-0.5 font-hx-mono text-hx-10 text-hx-text-mid">
+    <kbd className="inline-flex min-w-[20px] items-center justify-center rounded border border-hx-border-strong bg-hx-bg-overlay px-1.5 py-0.5 hx-mono text-hx-10 text-hx-text-mid">
       {children}
     </kbd>
   );

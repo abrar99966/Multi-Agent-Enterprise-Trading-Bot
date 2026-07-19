@@ -20,6 +20,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { DEFAULT_SYMBOLS } from '../../components/ws/modules/markets/marketsApi';
 
 /* ---- module registry -----------------------------------------------------
    The single source of truth for what exists. Sidebar, command palette,
@@ -57,7 +58,11 @@ const STORE_KEY = 'hx.ws.state';
 const INITIAL = {
   moduleId: 'dashboard',
   symbol: null,
-  symbols: undefined,          // undefined ⇒ Markets falls back to its own default universe
+  // Seeded, not undefined: the universe has to exist before Markets is ever
+  // opened, because the command palette's symbol search reads it from here. A
+  // static constant keeps server and first client render identical (SSR
+  // contract above); the persisted list is adopted in the effect below.
+  symbols: DEFAULT_SYMBOLS,
   journal: '',
   db: '',
   settingsSection: 'appearance',

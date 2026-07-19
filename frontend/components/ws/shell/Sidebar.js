@@ -41,7 +41,7 @@ function NavItem({ mod, active, collapsed, onSelect }) {
       />
       {!collapsed && <span className="truncate">{mod.label}</span>}
       {!collapsed && mod.key && (
-        <span className="ml-auto font-hx-mono text-hx-10 text-hx-text-dim tabular-nums">{mod.key}</span>
+        <span className="ml-auto hx-mono text-hx-10 text-hx-text-dim tabular-nums">{mod.key}</span>
       )}
     </button>
   );

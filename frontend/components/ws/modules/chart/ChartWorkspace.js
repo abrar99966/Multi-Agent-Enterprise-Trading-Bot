@@ -8,6 +8,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useCandles } from '../../../../lib/useCandles';
+import { CADENCE } from '../../../../lib/ws/api';
 import {
   Button,
   EmptyState,
@@ -65,6 +66,8 @@ export function ChartWorkspace({ symbol, markers = [], onSelectBar, height = 340
     range: frame.range,
     interval: frame.interval,
     enabled: Boolean(symbol),
+    // Without this the candles and the header price freeze at first paint.
+    pollMs: CADENCE.intraday,
   });
 
   // The quote endpoint has two provider shapes; normalise the two field spellings.
@@ -126,14 +129,14 @@ export function ChartWorkspace({ symbol, markers = [], onSelectBar, height = 340
       <PanelHeader
         title={
           <span className="flex items-baseline gap-2">
-            <span className="font-hx-mono text-hx-13 font-semibold text-hx-text-hi">
+            <span className="hx-mono text-hx-13 font-semibold text-hx-text-hi">
               {symbol || '—'}
             </span>
             {price != null && (
               <>
-                <span className="font-hx-mono text-hx-12 text-hx-text-hi">{fmtNum(price)}</span>
+                <span className="hx-mono text-hx-12 text-hx-text-hi">{fmtNum(price)}</span>
                 {changePct != null && (
-                  <span className={cx('font-hx-mono text-hx-11', TONE_TEXT[tone])}>
+                  <span className={cx('hx-mono text-hx-11', TONE_TEXT[tone])}>
                     {/* change_pct arrives already scaled (2.36 = 2.36%), not as a ratio */}
                     {deltaArrow(changePct)} {fmtPct(changePct, { asRatio: false })}
                   </span>

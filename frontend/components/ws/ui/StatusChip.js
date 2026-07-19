@@ -49,6 +49,7 @@ export function StatusChip({
   label,          // overrides the default label
   detail,         // e.g. "12ms" or "3 feeds" — rendered muted after the label
   showIcon = false,
+  live = false,   // opt in to screen-reader announcements — see note below
   className = '',
   ...rest
 }) {
@@ -56,10 +57,6 @@ export function StatusChip({
   const text = label || s.label;
   return (
     <span
-      // role=status so screen readers announce transitions (live → offline)
-      // without the user having to hunt for the indicator.
-      role="status"
-      aria-label={`${text}${detail ? `, ${detail}` : ''}`}
       className={cx(
         'inline-flex items-center gap-1.5 h-[20px] px-2 rounded border',
         'border-hx-border-subtle bg-white/[0.03] text-hx-11 font-medium whitespace-nowrap',
@@ -69,8 +66,19 @@ export function StatusChip({
     >
       <StatusDot status={status} />
       {showIcon && s.icon && <Icon name={s.icon} size={11} className={TONE_TEXT[s.tone]} />}
-      <span className={TONE_TEXT[s.tone] || TONE_TEXT.neutral}>{text}</span>
-      {detail && <span className="text-hx-text-dim hx-tnum">{detail}</span>}
+      {/* role=status is opt-in, not baked into the primitive: it is an implicit
+          aria-live region, and several call sites feed `detail` a value that
+          changes on every poll tick (latency, wall-clock timestamps). Announcing
+          those every 15-20s for a whole session is unusable, so only the status
+          word goes in the live region and the ticking detail is hidden from it. */}
+      <span role={live ? 'status' : undefined} className={TONE_TEXT[s.tone] || TONE_TEXT.neutral}>
+        {text}
+      </span>
+      {detail && (
+        <span aria-hidden={live ? 'true' : undefined} className="text-hx-text-dim hx-tnum">
+          {detail}
+        </span>
+      )}
     </span>
   );
 }

@@ -61,14 +61,14 @@ function ConfidenceRing({ value = 0, size = 34 }) {
           strokeDasharray={`${c * pct} ${c}`}
         />
       </svg>
-      <span className="absolute font-hx-mono text-hx-10 text-hx-text-mid">{Math.round(pct * 100)}</span>
+      <span className="absolute hx-mono text-hx-10 text-hx-text-mid">{Math.round(pct * 100)}</span>
     </span>
   );
 }
 
 export function StrategyCard({ strategy, active, onSelect }) {
-  const pnl = strategy.pnl ?? 0;
-  const tone = deltaTone(pnl);
+  const avgMove = strategy.avgMovePct ?? null;
+  const tone = deltaTone(avgMove);
   return (
     <button
       type="button"
@@ -88,30 +88,30 @@ export function StrategyCard({ strategy, active, onSelect }) {
             {strategy.symbol || 'portfolio'}
           </span>
         </span>
-        <Badge tone={strategy.mode === 'LIVE' ? 'pos' : strategy.mode === 'SHADOW' ? 'info' : 'warn'} size="xs">
-          {strategy.mode}
+        <Badge tone="neutral" size="xs">
+          {strategy.horizon}
         </Badge>
       </span>
 
       <span className="flex items-center justify-between gap-2">
         <ConfidenceRing value={strategy.confidence} />
         <span className="text-right">
-          <span className="block text-hx-10 text-hx-text-dim">P&amp;L today</span>
-          <span className={cx('block font-hx-mono text-hx-13 tabular-nums', TONE_TEXT[tone])}>
-            {deltaArrow(pnl)} {fmtCur(Math.abs(pnl), { ccy: 'INR', compact: true })}
+          <span className="block text-hx-10 text-hx-text-dim">Avg move</span>
+          <span className={cx('block hx-mono text-hx-13 tabular-nums', TONE_TEXT[tone])}>
+            {deltaArrow(avgMove)} {fmtPct(avgMove, { asRatio: false, signed: false })}
           </span>
         </span>
       </span>
 
       <span className="flex items-center justify-between border-t border-hx-border-subtle pt-1.5 text-hx-10">
         <span className="text-hx-text-dim">
-          lat <span className="font-hx-mono text-hx-text-lo">{fmtLatency(strategy.latencyMs)}</span>
+          lat <span className="hx-mono text-hx-text-lo">{fmtLatency(strategy.latencyMs)}</span>
         </span>
         <span className="text-hx-text-dim">
-          hit <span className="font-hx-mono text-hx-text-lo">{fmtPct(strategy.hitRate, { asRatio: true, signed: false })}</span>
+          hit <span className="hx-mono text-hx-text-lo">{fmtPct(strategy.hitRate, { asRatio: true, signed: false })}</span>
         </span>
         <span className="text-hx-text-dim">
-          n <span className="font-hx-mono text-hx-text-lo">{fmtNum(strategy.trades, { dp: 0 })}</span>
+          n <span className="hx-mono text-hx-text-lo">{fmtNum(strategy.trades, { dp: 0 })}</span>
         </span>
       </span>
     </button>
@@ -134,10 +134,12 @@ function strategiesFromStats(stats) {
       id: k,
       name: `Horizon ${k}`,
       symbol: null,
-      mode: k === '1h' ? 'LIVE' : 'PAPER',
+      // The horizon key, not a deployment mode — the backend has no concept of
+      // LIVE/PAPER here, and avg_move_pct is a mean % move, not rupee P&L.
+      horizon: k,
       confidence: h.hit_rate ?? 0,
       hitRate: h.hit_rate ?? null,
-      pnl: (h.avg_move_pct ?? 0) * (h.graded ?? 0) * 100,
+      avgMovePct: h.avg_move_pct ?? null,
       trades: h.graded ?? 0,
       latencyMs: null,
     };
@@ -218,7 +220,7 @@ export function DashboardModule({ symbol, onSelectSymbol, strategyId, onSelectSt
         />
         <MetricCard
           label="Expectancy 1h"
-          value={fmtPct(stats?.expectancy_1h, { asRatio: true })}
+          value={fmtPct(stats?.expectancy_1h, { asRatio: false })}
           raw={stats?.expectancy_1h}
           tone={deltaTone(stats?.expectancy_1h)}
           period="per signal"

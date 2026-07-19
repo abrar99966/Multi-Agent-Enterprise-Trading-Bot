@@ -33,7 +33,7 @@ function KV({ k, v, tone }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5">
       <span className="text-hx-11 text-hx-text-lo">{k}</span>
-      <span className={cx('font-hx-mono text-hx-11 tabular-nums', tone ? TONE_TEXT[tone] : 'text-hx-text-hi')}>{v}</span>
+      <span className={cx('hx-mono text-hx-11 tabular-nums', tone ? TONE_TEXT[tone] : 'text-hx-text-hi')}>{v}</span>
     </div>
   );
 }
@@ -169,13 +169,13 @@ function ApprovalDrawer({ rec, onClose, onDone, log }) {
               {isLive
                 ? 'This will place a LIVE order with real capital.'
                 : 'This will place a simulated (paper) order.'}{' '}
-              Type <span className="font-hx-mono text-hx-text-hi">{confirmWord}</span> to confirm.
+              Type <span className="hx-mono text-hx-text-hi">{confirmWord}</span> to confirm.
             </p>
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               aria-label={`Type ${confirmWord} to confirm`}
-              className="hx-focus mt-1.5 w-full rounded border border-hx-border-subtle bg-hx-bg-base px-2 py-1 font-hx-mono text-hx-12 text-hx-text-hi outline-none"
+              className="hx-focus mt-1.5 w-full rounded border border-hx-border-subtle bg-hx-bg-base px-2 py-1 hx-mono text-hx-12 text-hx-text-hi outline-none"
               placeholder={confirmWord}
             />
           </section>
@@ -209,7 +209,7 @@ export function OrdersModule({ symbol, onSelectSymbol, log }) {
 
   const columns = useMemo(
     () => [
-      { key: 'symbol', header: 'Symbol', width: 100, render: (r) => <span className="font-hx-mono text-hx-text-hi">{r.symbol}</span> },
+      { key: 'symbol', header: 'Symbol', width: 100, render: (r) => <span className="hx-mono text-hx-text-hi">{r.symbol}</span> },
       {
         key: 'side',
         header: 'Side',
@@ -225,7 +225,7 @@ export function OrdersModule({ symbol, onSelectSymbol, log }) {
         header: 'Conf',
         width: 64,
         align: 'right',
-        render: (r) => <span className="font-hx-mono">{Math.round((r.confidence_score || 0) * 100)}%</span>,
+        render: (r) => <span className="hx-mono">{Math.round((r.confidence_score || 0) * 100)}%</span>,
       },
       { key: 'risk_reward_ratio', header: 'R:R', width: 60, align: 'right', render: (r) => `1:${fmtNum(r.risk_reward_ratio, { dp: 1 })}` },
       { key: 'created_at', header: 'Created', width: 90, render: (r) => fmtTime(r.created_at) },

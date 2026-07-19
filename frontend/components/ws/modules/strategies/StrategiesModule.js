@@ -6,7 +6,7 @@
  * follows their progress at the documented 2s cadence — the only poll in the
  * product fast enough to feel live, and only while a run is active.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLivePoll } from '../../../../lib/useLivePoll';
 import { CADENCE, apiBase, jget, jpost } from '../../../../lib/ws/api';
 import {
@@ -130,9 +130,23 @@ export function LearningModule({ log }) {
   const [err, setErr] = useState(null);
 
   // Status is polled fast, but only while a run is in flight — a 2s poll left
-  // running all day is pure load for no information.
-  const { data: status } = useLivePoll(jget(`${base}/api/v1/learning/status`), CADENCE.training);
-  const running = Boolean(status?.running ?? (status?.done != null && status?.total != null && status.done < status.total));
+  // running all day is pure load for no information. `running` therefore has to
+  // exist BEFORE the poll that produces it, so it is state fed back by the poll
+  // below. The cadence is also a dep: useLivePoll closes over intervalMs inside
+  // an effect keyed on `deps`, so without it the first interval would be kept
+  // forever and the ternary would never take effect.
+  const [running, setRunning] = useState(false);
+  const statusCadence = running ? CADENCE.training : CADENCE.performance;
+  const { data: status } = useLivePoll(
+    jget(`${base}/api/v1/learning/status`),
+    statusCadence,
+    ['learning:status', statusCadence],
+  );
+  useEffect(() => {
+    setRunning(
+      Boolean(status?.running ?? (status?.done != null && status?.total != null && status.done < status.total)),
+    );
+  }, [status]);
 
   const universeList = useMemo(() => {
     const raw = Array.isArray(universes) ? universes : universes?.universes || [];
@@ -143,7 +157,12 @@ export function LearningModule({ log }) {
     setStarting(true);
     setErr(null);
     try {
-      await jpost('/api/v1/learning/train', universe ? { universe } : {});
+      // TrainRequest declares `preset` — a `universe` key is silently dropped by
+      // Pydantic and the run degrades to the default watchlist.
+      await jpost('/api/v1/learning/train', universe ? { preset: universe } : {});
+      // The POST marks the run active before it returns, so go to the fast
+      // cadence now rather than waiting out the idle poll to notice.
+      setRunning(true);
       log && log('info', `Training started${universe ? ` · ${universe}` : ''}`);
     } catch (e) {
       setErr(e.message);
@@ -152,7 +171,14 @@ export function LearningModule({ log }) {
     }
   }, [universe, log]);
 
-  const pct = status?.total ? Math.round(((status.done || 0) / status.total) * 100) : null;
+  // /learning/status wraps the counters: { running, state: { progress: {...} } }.
+  const prog = status?.state?.progress || {};
+  const pct =
+    prog.percent != null
+      ? Math.round(prog.percent)
+      : prog.total
+        ? Math.round(((prog.done || 0) / prog.total) * 100)
+        : null;
 
   return (
     <div className="hx-scroll h-full min-h-0 space-y-2 overflow-y-auto p-2">
@@ -189,10 +215,10 @@ export function LearningModule({ log }) {
             <div>
               <div className="flex items-baseline justify-between text-hx-11">
                 <span className="text-hx-text-lo">
-                  {status?.current_symbol ? `Processing ${status.current_symbol}` : 'Working'}
+                  {prog.current_symbol ? `Processing ${prog.current_symbol}` : 'Working'}
                 </span>
-                <span className="font-hx-mono text-hx-text-mid">
-                  {fmtNum(status?.done, { dp: 0 })} / {fmtNum(status?.total, { dp: 0 })}
+                <span className="hx-mono text-hx-text-mid">
+                  {fmtNum(prog.done, { dp: 0 })} / {fmtNum(prog.total, { dp: 0 })}
                   {pct != null ? ` · ${pct}%` : ''}
                 </span>
               </div>
@@ -221,7 +247,7 @@ export function LearningModule({ log }) {
         />
         <PanelBody>
           {results ? (
-            <pre className="hx-scroll max-h-[320px] overflow-auto whitespace-pre-wrap break-words font-hx-mono text-hx-10 text-hx-text-lo">
+            <pre className="hx-scroll max-h-[320px] overflow-auto whitespace-pre-wrap break-words hx-mono text-hx-10 text-hx-text-lo">
               {JSON.stringify(results, null, 2)}
             </pre>
           ) : (

@@ -154,6 +154,29 @@ export function CommandPalette({ open, onClose, ws, symbols = [] }) {
     if (el) el.scrollIntoView({ block: 'nearest' });
   }, [active, results]);
 
+  /* ESC + Tab bound to the document in capture phase, like Drawer and
+     ShortcutHelp. Escape must not live on the input's onKeyDown: one Tab moves
+     focus off the input and the palette becomes undismissable. The input is the
+     only focusable node here (results are role=option divs), so Tab simply
+     cycles back to it rather than escaping to the shell behind the backdrop. */
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [open, onClose]);
+
   const runAt = useCallback(
     (i) => {
       const cmd = results[i];
@@ -175,10 +198,8 @@ export function CommandPalette({ open, onClose, ws, symbols = [] }) {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       runAt(active);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
     }
+    // Escape is handled on the document — see the focus-trap effect above.
   };
 
   if (!open) return null;
@@ -209,7 +230,7 @@ export function CommandPalette({ open, onClose, ws, symbols = [] }) {
             aria-activedescendant={results[active] ? `hx-cmd-${results[active].id}` : undefined}
             className="h-10 flex-1 bg-transparent text-hx-13 text-hx-text-hi placeholder:text-hx-text-dim focus:outline-none"
           />
-          <kbd className="rounded border border-hx-border-subtle px-1 font-hx-mono text-hx-10 text-hx-text-dim">esc</kbd>
+          <kbd className="rounded border border-hx-border-subtle px-1 hx-mono text-hx-10 text-hx-text-dim">esc</kbd>
         </div>
 
         <div
@@ -246,7 +267,7 @@ export function CommandPalette({ open, onClose, ws, symbols = [] }) {
               <span
                 className={cx(
                   'truncate text-hx-12',
-                  c.mono && 'font-hx-mono font-semibold',
+                  c.mono && 'hx-mono font-semibold',
                   i === active ? 'text-hx-text-hi' : 'text-hx-text-mid',
                 )}
               >
@@ -257,7 +278,7 @@ export function CommandPalette({ open, onClose, ws, symbols = [] }) {
                 {c.keys?.map((k) => (
                   <kbd
                     key={k}
-                    className="rounded border border-hx-border-subtle bg-hx-bg-raised px-1 font-hx-mono text-hx-10 text-hx-text-dim"
+                    className="rounded border border-hx-border-subtle bg-hx-bg-raised px-1 hx-mono text-hx-10 text-hx-text-dim"
                   >
                     {k}
                   </kbd>

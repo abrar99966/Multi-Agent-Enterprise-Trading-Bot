@@ -5,7 +5,7 @@
  * agent-probing /performance/health) so "is the backend up" never costs a real
  * query. Latency is measured client-side around that fetch.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Icon, StatusChip, cx, fmtLatency } from '../ui';
 import { apiBase, CADENCE } from '../../../lib/ws/api';
 import { useLivePoll } from '../../../lib/useLivePoll';
@@ -20,9 +20,9 @@ function Clock() {
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, []);
-  if (!now) return <span className="font-hx-mono text-hx-11 text-hx-text-dim tabular-nums">--:--:--</span>;
+  if (!now) return <span className="hx-mono text-hx-11 text-hx-text-dim tabular-nums">--:--:--</span>;
   return (
-    <span className="font-hx-mono text-hx-11 text-hx-text-lo tabular-nums" suppressHydrationWarning>
+    <span className="hx-mono text-hx-11 text-hx-text-lo tabular-nums" suppressHydrationWarning>
       {now.toLocaleTimeString('en-GB', { hour12: false })}
     </span>
   );
@@ -30,7 +30,11 @@ function Clock() {
 
 /** Round-trips /health and reports status + measured latency. */
 function useBackendHealth() {
-  const latencyRef = useRef(null);
+  // State, not a ref: /health answers with a byte-identical body every time, so
+  // useLivePoll's hash check never calls setData and nothing else here changes
+  // either. A ref would be written on every poll and read by a render that never
+  // happens again, freezing the chip on its first measurement forever.
+  const [latency, setLatency] = useState(null);
   const fetcher = useCallback((signal) => {
     const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
     return fetch(`${apiBase()}/health`, { signal })
@@ -40,7 +44,7 @@ function useBackendHealth() {
       })
       .then((j) => {
         const t1 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        latencyRef.current = t1 - t0;
+        setLatency(t1 - t0);
         return j;
       });
   }, []);
@@ -50,7 +54,7 @@ function useBackendHealth() {
 
   // Degraded is a real state: the probe answered but not with "healthy".
   const status = error ? 'offline' : loading && !data ? 'stale' : data?.status === 'healthy' ? 'connected' : 'degraded';
-  return { status, latency: latencyRef.current, error };
+  return { status, latency, error };
 }
 
 export function TopBar({
@@ -88,7 +92,7 @@ export function TopBar({
         {symbol && (
           <>
             <Icon name="chevron-right" size={12} className="shrink-0 text-hx-text-dim" />
-            <span className="font-hx-mono text-hx-12 font-semibold text-hx-accent-300">{symbol}</span>
+            <span className="hx-mono text-hx-12 font-semibold text-hx-accent-300">{symbol}</span>
           </>
         )}
       </div>
@@ -105,15 +109,19 @@ export function TopBar({
       >
         <Icon name="search" size={13} />
         <span>Search symbols, modules, actions</span>
-        <kbd className="ml-auto rounded border border-hx-border-subtle bg-hx-bg-raised px-1 font-hx-mono text-hx-10 text-hx-text-dim">
+        <kbd className="ml-auto rounded border border-hx-border-subtle bg-hx-bg-raised px-1 hx-mono text-hx-10 text-hx-text-dim">
           ⌘K
         </kbd>
       </button>
 
       <div className="flex items-center gap-2">
+        {/* The one chip that announces: connection loss is worth interrupting
+            for. `live` keeps the announcement to the status word — the latency
+            detail beside it re-renders every poll and must stay silent. */}
         <StatusChip
           status={status}
           showIcon
+          live
           detail={status === 'connected' && latency != null ? fmtLatency(latency) : undefined}
         />
         <Clock />

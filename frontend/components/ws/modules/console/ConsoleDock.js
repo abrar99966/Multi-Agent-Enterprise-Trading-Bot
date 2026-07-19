@@ -57,7 +57,7 @@ function TradesTab({ onSelectSymbol, onOpenRow }) {
   const columns = useMemo(
     () => [
       { key: 'executed_at', header: 'Time', width: 80, render: (r) => fmtTime(parseUtc(r.executed_at) || r.executed_at) },
-      { key: 'symbol', header: 'Symbol', width: 96, render: (r) => <span className="font-hx-mono text-hx-text-hi">{r.symbol}</span> },
+      { key: 'symbol', header: 'Symbol', width: 96, render: (r) => <span className="hx-mono text-hx-text-hi">{r.symbol}</span> },
       {
         key: 'side',
         header: 'Side',
@@ -132,7 +132,7 @@ function OrdersTab({ onSelectSymbol, onOpenRow }) {
   const columns = useMemo(
     () => [
       { key: 'created_at', header: 'Created', width: 80, render: (r) => fmtTime(parseUtc(r.created_at) || r.created_at) },
-      { key: 'symbol', header: 'Symbol', width: 96, render: (r) => <span className="font-hx-mono text-hx-text-hi">{r.symbol}</span> },
+      { key: 'symbol', header: 'Symbol', width: 96, render: (r) => <span className="hx-mono text-hx-text-hi">{r.symbol}</span> },
       {
         key: 'side',
         header: 'Side',
@@ -152,7 +152,7 @@ function OrdersTab({ onSelectSymbol, onOpenRow }) {
         header: 'Conf',
         width: 60,
         align: 'right',
-        render: (r) => <span className="font-hx-mono">{Math.round((r.confidence_score || 0) * 100)}%</span>,
+        render: (r) => <span className="hx-mono">{Math.round((r.confidence_score || 0) * 100)}%</span>,
       },
       { key: 'risk_reward_ratio', header: 'R:R', width: 56, align: 'right', render: (r) => `1:${fmtNum(r.risk_reward_ratio, { dp: 1 })}` },
       { key: 'status', header: 'Status', width: 120, render: (r) => <Badge tone="warn" size="xs">{r.status}</Badge> },
@@ -307,7 +307,7 @@ function BrokersTab() {
     () => [
       { key: 'broker_name', header: 'Broker', width: 120, render: (r) => <span className="text-hx-text-hi">{r.broker_name}</span> },
       { key: 'status', header: 'Status', width: 110, render: (r) => <Badge tone={String(r.status).toUpperCase() === 'CONNECTED' ? 'pos' : 'warn'} size="xs">{r.status}</Badge> },
-      { key: 'account_id', header: 'Account', width: 140, render: (r) => <span className="font-hx-mono text-hx-text-mid">{r.account_id || '--'}</span> },
+      { key: 'account_id', header: 'Account', width: 140, render: (r) => <span className="hx-mono text-hx-text-mid">{r.account_id || '--'}</span> },
       { key: 'is_paper', header: 'Mode', width: 70, render: (r) => (r.is_paper ? 'paper' : 'live') },
       { key: 'last_error', header: 'Last message', render: (r) => <span className="text-hx-text-lo">{r.last_error || '--'}</span> },
     ],
@@ -397,7 +397,7 @@ export function ConsoleDock({ onSelectSymbol, consoleLines = [], onClearConsole 
         title={detail ? `${detail.kind} detail` : ''}
       >
         {detail && (
-          <pre className="hx-scroll overflow-auto whitespace-pre-wrap break-words font-hx-mono text-hx-10 text-hx-text-lo">
+          <pre className="hx-scroll overflow-auto whitespace-pre-wrap break-words hx-mono text-hx-10 text-hx-text-lo">
             {JSON.stringify(detail.row, null, 2)}
           </pre>
         )}

@@ -433,7 +433,7 @@ export function CandleChart({
 
       {/* OHLC legend — the readout replaces a tooltip so the eye never leaves
           the price action */}
-      <div className="pointer-events-none absolute left-2 top-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-hx-mono text-hx-10">
+      <div className="pointer-events-none absolute left-2 top-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 hx-mono text-hx-10">
         {hoverBar ? (
           <>
             <span className="text-hx-text-dim">{fmtTime(hoverBar.t)}</span>

@@ -5,7 +5,7 @@
  * gated behind a typed confirmation and states its blast radius in words before
  * it will arm. Resuming is equally explicit: nothing here toggles on one click.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLivePoll } from '../../../../lib/useLivePoll';
 import { CADENCE, apiBase, jget, jpost } from '../../../../lib/ws/api';
 import {
@@ -28,16 +28,79 @@ import {
   fmtTime,
 } from '../../ui';
 
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
 /** Typed-confirmation modal shared by arm/resume. */
 function ConfirmKill({ arming, onCancel, onConfirm, busy, error }) {
   const word = arming ? 'HALT' : 'RESUME';
   const [typed, setTyped] = useState('');
   const ok = typed.trim().toUpperCase() === word;
+  const panelRef = useRef(null);
+  const inputRef = useRef(null);
+  const restoreRef = useRef(null);
+  const titleId = `${useId()}-title`;
+
+  // Move focus in, and hand it back to the trigger on close. Focusing here
+  // rather than via `autoFocus` is deliberate: autoFocus lands during commit,
+  // before this effect runs, so it would overwrite the element we must restore.
+  useEffect(() => {
+    restoreRef.current = typeof document !== 'undefined' ? document.activeElement : null;
+    inputRef.current?.focus({ preventScroll: true });
+    return () => {
+      const el = restoreRef.current;
+      if (el && typeof el.focus === 'function') el.focus({ preventScroll: true });
+    };
+  }, []);
+
+  // ESC + Tab trapping, bound to the document in capture phase like Drawer and
+  // ShortcutHelp. Without it a single Tab walks out of the dialog into the
+  // TopBar behind the backdrop, and Escape is then heard by nothing at all.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const node = panelRef.current;
+      if (!node) return;
+      const items = Array.from(node.querySelectorAll(FOCUSABLE)).filter(
+        (el) => el.offsetParent !== null || el === document.activeElement,
+      );
+      if (items.length === 0) {
+        e.preventDefault();
+        node.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      // Wrap at both ends so focus can never escape to the page behind.
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === node)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [onCancel]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-lg border border-hx-border-strong bg-hx-bg-overlay p-4 shadow-hx-pop">
-        <h3 className="flex items-center gap-2 text-hx-13 font-semibold text-hx-text-hi">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-6" role="presentation">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-lg border border-hx-border-strong bg-hx-bg-overlay p-4 shadow-hx-pop outline-none"
+      >
+        <h3 id={titleId} className="flex items-center gap-2 text-hx-13 font-semibold text-hx-text-hi">
           <Icon name="kill" size={15} className={arming ? 'text-hx-neg-400' : 'text-hx-pos-400'} />
           {arming ? 'Engage kill switch' : 'Resume trading'}
         </h3>
@@ -47,12 +110,12 @@ function ConfirmKill({ arming, onCancel, onConfirm, busy, error }) {
             : 'This re-enables order release. Positions and limits are unchanged; the desk resumes under existing risk caps.'}
         </p>
         <label className="mt-3 block text-hx-11 text-hx-text-lo">
-          Type <span className="font-hx-mono text-hx-text-hi">{word}</span> to confirm
+          Type <span className="hx-mono text-hx-text-hi">{word}</span> to confirm
           <input
-            autoFocus
+            ref={inputRef}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            className="hx-focus mt-1 w-full rounded border border-hx-border-subtle bg-hx-bg-base px-2 py-1 font-hx-mono text-hx-12 text-hx-text-hi outline-none"
+            className="hx-focus mt-1 w-full rounded border border-hx-border-subtle bg-hx-bg-base px-2 py-1 hx-mono text-hx-12 text-hx-text-hi outline-none"
             placeholder={word}
           />
         </label>
@@ -233,7 +296,7 @@ export function RiskModule({ log }) {
                   </span>
                   <span className="flex items-center gap-3">
                     {a.error && <span className="max-w-[280px] truncate text-hx-10 text-hx-neg-300">{a.error}</span>}
-                    <span className="font-hx-mono text-hx-11 text-hx-text-lo">{fmtNum(a.latency_ms, { dp: 0 })}ms</span>
+                    <span className="hx-mono text-hx-11 text-hx-text-lo">{fmtNum(a.latency_ms, { dp: 0 })}ms</span>
                   </span>
                 </li>
               ))}
