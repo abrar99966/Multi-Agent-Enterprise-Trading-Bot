@@ -329,6 +329,27 @@ Three free public sources, confined to the Slow Path and product surface — off
 
 **Today (✅).** A single-process application serves the API and operator dashboard; the frontend runs separately; state is local. One command brings up the backend, dashboard, and optional legacy UI.
 
+```powershell
+.\start.ps1                                                          # everything
+venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --port 8000
+cd frontend; npm run dev                                             # UI on 3001
+venv\Scripts\python.exe -m pytest tests/                             # 281 tests
+```
+
+| Surface | URL |
+|---|---|
+| Workspace (current UI) | `http://127.0.0.1:3001/workspace` |
+| Classic multi-page desk | `http://127.0.0.1:3001` |
+| Operator dashboard (zero-dependency) | `http://127.0.0.1:8000/dash` |
+| API reference · health | `http://127.0.0.1:8000/docs` · `/health` |
+
+Import root is `app.*` with `backend/` on `sys.path`. Operating instructions,
+module reference and keyboard shortcuts live in [`USER_GUIDE.md`](../USER_GUIDE.md).
+
+> **Build/dev collision:** `npm run build` fails with a misleading
+> `Cannot find module for page: /screener` while `npm run dev` is running — the
+> dev server rewrites `.next/` concurrently. Stop it before building.
+
 **Target (🔵⚪).** A single-host hot path on pinned CPU cores; the Risk Gateway on its own hard-isolated host as sole credential holder; a durable data plane (replayable bus, tick store, columnar analytics, transactional OMS, WORM archive); and a Slow Path / control plane on managed Kubernetes. Clocks are PTP-disciplined. Environments progress `research → paper → prod`, where **paper is a permanent, always-on soak environment.**
 
 ```mermaid

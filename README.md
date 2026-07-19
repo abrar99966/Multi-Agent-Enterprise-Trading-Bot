@@ -277,21 +277,42 @@ cd ..
 
 # Or manually:
 # Backend
-.\venv\Scripts\uvicorn.exe app.main:app --app-dir backend --port 8000
+venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --port 8000
 
 # Frontend (separate terminal)
 cd frontend && npm run dev
 ```
 
+> ⚠️ Don't run `npm run build` while `npm run dev` is running — the dev server
+> rewrites `.next/` concurrently and the build fails with a misleading
+> "Cannot find module for page: /screener". Stop the dev server first.
+
 ### 5. Access the Application
 
 | URL | Description |
 |-----|-------------|
-| `http://127.0.0.1:8000/dash` | Institutional dashboard (new) |
-| `http://127.0.0.1:3001` | Classic trading desk |
+| **`http://127.0.0.1:3001/workspace`** | **The Workspace — current UI.** Single-screen desk: 12 modules, docked AI Copilot, command palette (`Ctrl K`) |
+| `http://127.0.0.1:3001` | Classic multi-page desk (still supported) |
+| `http://127.0.0.1:8000/dash` | Zero-dependency operator dashboard (no Node needed) |
 | `http://127.0.0.1:8000/docs` | API documentation (Swagger) |
 | `http://127.0.0.1:8000/api/v1/slowpath/dashboard` | Agent governance dashboard |
 | `http://127.0.0.1:8000/health` | Health check endpoint |
+
+See [`USER_GUIDE.md`](USER_GUIDE.md#the-workspace-workspace) for the Workspace
+layout, module reference, keyboard shortcuts and the order-approval flow.
+
+### 6. Optional free data keys
+
+The platform runs fully without these. Add to `.env` to enable:
+
+```
+ETB_FRED_API_KEY=        # free — adds VIX to the macro regime panel
+ETB_FINNHUB_API_KEY=     # free — market-data failover + company news
+ETB_OPENFIGI_API_KEY=    # optional — symbology works keyless; a key raises the rate limit
+```
+
+A blank key disables that source cleanly. The US Treasury yield curve needs no
+key and is always on. Details: [`docs/PUBLIC_API_ENRICHMENT.md`](docs/PUBLIC_API_ENRICHMENT.md).
 
 ---
 

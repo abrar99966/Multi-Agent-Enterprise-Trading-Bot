@@ -16,7 +16,8 @@ LLM-powered slow path) works together in practice.
 
 1. [What this app is](#what-this-app-is)
 2. [Quick start (5 minutes)](#quick-start-5-minutes)
-3. [Pages](#pages)
+3. [The Workspace `/workspace`](#the-workspace-workspace) — the current UI
+4. [Pages (classic desk)](#pages-classic-desk)
    - [Dashboard `/`](#dashboard-)
    - [Brokers `/brokers`](#brokers-brokers)
    - [Training `/training`](#training-training)
@@ -88,19 +89,48 @@ and international equity markets. Built on a dual-speed architecture:
 
 ## Quick start (5 minutes)
 
-Both servers should already be running. If not:
-
 ```powershell
-# Backend (from project root)
-./venv/Scripts/uvicorn.exe backend.app.main:app --host 127.0.0.1 --port 8000 --log-level warning
+# Everything at once (backend + dashboard + frontend)
+.\start.ps1
 
-# Frontend (from frontend/)
+# --- or run the pieces yourself ---
+
+# Backend, from the project root
+venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --port 8000
+
+# Frontend, from frontend/ (serves on 3001)
 npm run dev
 ```
 
-Open **http://127.0.0.1:3001**.
+Then open whichever surface you want:
 
-To see the system fully alive:
+| URL | What it is |
+|---|---|
+| **http://127.0.0.1:3001/workspace** | **The Workspace — the current UI.** Single-screen trading desk |
+| http://127.0.0.1:3001 | Classic multi-page desk (still supported) |
+| http://127.0.0.1:8000/dash | Zero-dependency operator dashboard (no Node required) |
+| http://127.0.0.1:8000/docs | Swagger API reference |
+| http://127.0.0.1:8000/health | Liveness probe |
+
+> **Note — do not run `npm run build` while `npm run dev` is running.** The dev
+> server rewrites `.next/` concurrently and the build fails with a confusing
+> "Cannot find module for page: /screener". Stop the dev server first.
+
+### Optional API keys
+
+Everything runs without keys. Three free sources add data when configured — set
+them in `.env` at the project root:
+
+```
+ETB_FRED_API_KEY=        # free — adds VIX to the macro regime panel
+ETB_FINNHUB_API_KEY=     # free — market-data failover + company news
+ETB_OPENFIGI_API_KEY=    # optional — symbology works keyless, a key just raises the rate limit
+```
+
+A blank key disables that source cleanly; nothing breaks. The US Treasury yield
+curve needs no key and is always on.
+
+To see the system fully alive (classic desk):
 1. Open `/brokers` → click **Dhan** or **Upstox** → paste credentials → connect
 2. Open `/performance` → set risk limits (per-trade ₹2,000, daily loss ₹500
    while testing) → leave kill switch off
@@ -112,7 +142,111 @@ To see the system fully alive:
 
 ---
 
-## Pages
+## The Workspace `/workspace`
+
+The current UI. One screen, twelve modules, no page navigation — switching
+modules is state, so charts, the Copilot conversation and console scroll
+positions all survive a switch.
+
+### Layout
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ TOP BAR   Helios · module · symbol      search (Ctrl K)  health  clock    │
+├────────┬────────────────────────────────────────────┬────────────────────┤
+│        │                                            │  AI COPILOT        │
+│ S      │            ACTIVE MODULE                   │  chat, reasoning,  │
+│ I      │      (dashboard, markets, portfolio …)     │  suggested actions │
+│ D      │                                            ├────────────────────┤
+│ E      │                                            │  CONTEXT TABS      │
+│ B      │                                            │  Insights · Risk · │
+│ A      │                                            │  Features · News · │
+│ R      │                                            │  Sentiment ·       │
+│        │                                            │  Exposure          │
+├────────┴────────────────────────────────────────────┴────────────────────┤
+│ CONSOLE DOCK  Recent Trades · Orders · Event Stream · Risk Alerts · Broker│
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+Every divider drags. Sizes persist across reloads, as does your last module,
+sidebar state and watchlist. **Selection is deliberately not persisted** —
+restoring a symbol you picked days ago would silently scope the whole desk to
+stale context.
+
+### Everything is connected
+
+This is the point of the layout: **selecting anything re-scopes everything
+else.** Click a symbol in the watchlist, a row in Recent Trades, or a position
+in Portfolio, and the chart, Copilot context header, context tabs and order book
+all follow it. Nothing is an isolated widget.
+
+### Modules
+
+| Module | Key | What it is for |
+|---|---|---|
+| **Dashboard** | `Alt 1` | Desk overview — KPI strip, price chart, graded signal cohorts |
+| **Markets** | `Alt 2` | Watchlist, price chart, order book, movers |
+| **Portfolio** | `Alt 3` | Positions, allocation, exposure treemap, equity curve, drawdown |
+| **Orders** | `Alt 4` | Pending recommendations, approve/reject, order lifecycle |
+| **Strategies** | `Alt 5` | Tournament arms; "Explain" pushes a strategy into the Copilot |
+| **Learning** | `Alt 6` | Launch training runs, follow live progress, inspect results |
+| **Analytics** | `Alt 7` | Transaction-cost analysis — shortfall, markouts, slippage |
+| **Copilot** | `Alt 8` | Full-width Copilot for long-form work |
+| **Risk** | `Alt 9` | Limit utilisation, component health, kill switch |
+| **Replay** | — | Journal replay + determinism diff |
+| **Logs** | — | Journal event console |
+| **Settings** | — | Appearance, data sources, brokers, shortcuts |
+
+### Keyboard
+
+| Keys | Action |
+|---|---|
+| `Ctrl K` | Command palette — symbols, modules, orders, actions |
+| `Alt 1`–`Alt 9` | Jump to module |
+| `[` / `]` | Toggle sidebar / context dock |
+| `Ctrl J` | Toggle the console dock |
+| `?` | Shortcut cheatsheet |
+| `Esc` | Close whatever is open |
+| `Space` | Pause/resume the event stream (while the console has focus) |
+| `Enter` | Send in the Copilot composer (`Shift Enter` for a newline) |
+
+Shortcuts are suppressed while you are typing in a field — except `Ctrl K` and
+`Esc`, which are the escape hatches.
+
+### Placing an order
+
+Deliberately three steps; a single mis-click can never reach a broker.
+
+1. **Orders** module → pick a recommendation → **Review**.
+2. **Preview** — the server prices it and shows the broker, the order type, the
+   estimated cost, and whether it is **paper or LIVE**.
+3. **Confirm** — type `APPROVE` for a live order (`OK` for paper). The button
+   stays disabled until the word matches.
+
+The kill switch works the same way: typing `HALT` to engage, `RESUME` to lift.
+It states its blast radius first — it stops *new orders*; it does **not** close
+open positions.
+
+### What the panels will not do
+
+Honest limits, so you do not read more into a panel than it knows:
+
+- **Order book is `MODELLED`** whenever no depth-capable broker is connected. It
+  is derived from the last price and labelled as such everywhere. No broker
+  adapter currently serves real depth — see `docs/DEPTH_FEED_SCOPE.md`.
+- **Features tab** says "not exposed" because the 22-feature fabric is computed
+  in-process and no REST endpoint publishes it.
+- **Sentiment tab** reports nothing rather than inferring a score: the free
+  Finnhub news tier carries no per-article sentiment.
+- **Watchlist shows "loading quotes…"** on a cold start. A ten-symbol first
+  fetch is genuinely slow upstream; afterwards polls are milliseconds.
+
+---
+
+## Pages (classic desk)
+
+The original multi-page UI at `http://127.0.0.1:3001` is unchanged and still
+supported. The Workspace does not replace it — both run against the same API.
 
 ### Dashboard `/`
 
