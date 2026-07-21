@@ -353,6 +353,89 @@ def _engulfing_signal(bars: List[Bar], p: StrategyParams) -> Signal:
     return "neutral"
 
 
+# +5:30, so previous-day levels bucket to the Indian session, not UTC midnight.
+_IST_OFFSET_S = 19800
+
+
+def _pdh_pdl_signal(bars: List[Bar], p: StrategyParams) -> Signal:
+    """PDH/PDL liquidity-sweep reversal — is a setup ARMED and TRIGGERED on the
+    latest bar?
+
+    A long fires when price swept below the Previous-Day-Low (a candle CLOSED
+    below PDL), the first bullish candle after that sweep armed a trigger at its
+    high, and the latest bar's HIGH breaks that trigger. Short is the mirror
+    around PDH. Returns the direction only on the bar the break happens, else
+    neutral. No look-ahead: PDH/PDL come from the COMPLETED prior day, and the
+    state machine only reads bars up to and including the last.
+
+    This is the SCREENER view of the strategy — "is a sweep-reversal live right
+    now?". The faithful path-dependent backtest (stop-entry fills, level-based
+    SL/TP checked intrabar) lives in scripts/backtest_pdh_pdl.py, because the
+    tournament's global stop_loss_pct / take_profit_pct exits cannot represent
+    a strategy whose exits ARE the previous-day levels.
+    """
+    if len(bars) < 3:
+        return "neutral"
+
+    def day_of(b: Bar) -> int:
+        return (b.t + _IST_OFFSET_S) // 86400
+
+    cur_day = day_of(bars[-1])
+    prev_day = cur_day - 1
+
+    # Previous-day levels from bars actually tagged to the prior IST day. A gap
+    # (no bars yesterday) means no reference levels -> no setup.
+    prev_bars = [b for b in bars if day_of(b) == prev_day]
+    if not prev_bars:
+        return "neutral"
+    pdh = max((b.h if b.h else b.c) for b in prev_bars)
+    pdl = min((b.l if b.l else b.c) for b in prev_bars)
+    if pdh <= pdl:
+        return "neutral"
+
+    today = [b for b in bars if day_of(b) == cur_day]
+    if len(today) < 2:
+        return "neutral"
+
+    # Replay today's bars; the signal is whatever triggers ON the final bar.
+    buy_phase = sell_phase = 0        # 0 idle · 1 swept · 2 armed
+    buy_trig = sell_trig = 0.0
+    last_i = len(today) - 1
+
+    for i, r in enumerate(today):
+        o = r.o if r.o else r.c
+        fired = None
+
+        # long side
+        if buy_phase == 0:
+            if r.c < pdl:
+                buy_phase = 1
+        elif buy_phase == 1:
+            if r.c > o:                # first bullish candle after the sweep
+                buy_trig, buy_phase = r.h, 2
+        elif buy_phase == 2:
+            if r.h >= buy_trig and buy_trig < pdh:
+                fired = "bullish"
+                buy_phase = 0
+
+        # short side
+        if sell_phase == 0:
+            if r.c > pdh:
+                sell_phase = 1
+        elif sell_phase == 1:
+            if r.c < o:                # first bearish candle after the sweep
+                sell_trig, sell_phase = r.l, 2
+        elif sell_phase == 2:
+            if r.l <= sell_trig and sell_trig > pdl:
+                fired = fired or "bearish"
+                sell_phase = 0
+
+        if i == last_i and fired:
+            return fired
+
+    return "neutral"
+
+
 # ---- Registry -------------------------------------------------------------------------
 
 @dataclass
@@ -449,6 +532,14 @@ STRATEGIES: Dict[str, Strategy] = {
         description="Bullish/bearish engulfing candlestick pattern — a common reversal screen.",
         signal_fn=_engulfing_signal,
         grid={},   # pattern-only — no tunable params (single combo)
+    ),
+    "pdh_pdl": Strategy(
+        key="pdh_pdl", label="PDH/PDL sweep reversal (levels)",
+        description=("Liquidity sweep of the previous day's high/low, then reversal on the "
+                     "break of the first opposing candle. Screener signal; faithful "
+                     "level-based backtest is scripts/backtest_pdh_pdl.py."),
+        signal_fn=_pdh_pdl_signal,
+        grid={},   # level-based, no tunable indicator params
     ),
 }
 

@@ -42,12 +42,27 @@ export function StrategiesModule({ strategyId, onSelectStrategy, onAskCopilot })
 
   const columns = useMemo(
     () => [
-      { key: 'name', header: 'Strategy', render: (r) => <span className="text-hx-text-hi">{r.name ?? r.id}</span> },
       {
-        key: 'kind',
-        header: 'Type',
-        width: 120,
-        render: (r) => <span className="text-hx-text-lo">{r.kind || r.category || 'tournament arm'}</span>,
+        key: 'name',
+        header: 'Strategy',
+        // The registry returns { key, label, description, grid_size }; show the
+        // human label, not the raw key, and carry the description underneath.
+        render: (r) => (
+          <div className="min-w-0">
+            <div className="truncate text-hx-text-hi">{r.label ?? r.name ?? r.id}</div>
+            {r.description && (
+              <div className="truncate text-hx-10 text-hx-text-dim">{r.description}</div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'grid_size',
+        header: 'Combos',
+        width: 90,
+        align: 'right',
+        // Parameter-grid size — a level/pattern strategy with no tunables shows 1.
+        render: (r) => (r.grid_size != null ? fmtNum(r.grid_size, { dp: 0 }) : '--'),
       },
       {
         key: 'wins',
@@ -67,7 +82,7 @@ export function StrategiesModule({ strategyId, onSelectStrategy, onAskCopilot })
             variant="subtle"
             onClick={(e) => {
               e.stopPropagation();
-              onAskCopilot && onAskCopilot(`Explain the ${r.name ?? r.id} strategy and when it underperforms.`);
+              onAskCopilot && onAskCopilot(`Explain the ${r.label ?? r.name ?? r.id} strategy and when it underperforms.`);
             }}
           >
             Explain
