@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.services import risk_limits
+from app.services import desk_chat, risk_limits
 from app.services.macro_data import macro_data
 from app.services.market_data import market_data_service, NSE_HINTS, INDEX_ALIAS
 from app.services.news_service import news_service
@@ -60,6 +60,7 @@ def _extract_symbol(text: str) -> Optional[str]:
 
 def _classify(text: str) -> str:
     t = text.lower()
+
     # Specific intents first — these phrases also contain generic keywords
     # ("trade", "strategy") that would otherwise mis-route to recommend/general.
     if ("reject" in t or "declined" in t or "blocked" in t) and any(
@@ -72,11 +73,32 @@ def _classify(text: str) -> str:
         return "backtest"
     if "drawdown" in t or "under water" in t or "underwater" in t:
         return "risk"
-    if any(w in t for w in ["price", "quote", "trading at", "how much", "level", "current"]):
+
+    # A compound / advisory question ("given X and Y, should I…?") is exactly what
+    # the conversational LLM is for. The keyword fast-paths below are single-fact
+    # lookups; letting them grab a nuanced question is how "should I be cautious
+    # given the macro regime and my limits" got answered with a bare NIFTY quote.
+    # Route long questions that touch more than one concern to the LLM instead.
+    concerns = sum(
+        1 for grp in (
+            ("price", "quote", "trading at", "ltp"),
+            ("news", "headline", "story"),
+            ("macro", "regime", "vix", "yield", "inflation", "rates"),
+            ("risk", "limit", "exposure", "stop loss", "stop-loss", "kill switch"),
+            ("strategy", "signal", "buy", "sell", "long", "short"),
+        )
+        if any(w in t for w in grp)
+    )
+    words = len(t.split())
+    if ("?" in t and words > 12) or concerns >= 2:
+        return "general"   # -> conversational LLM (grounded), see handler
+
+    # Single-fact fast paths (instant, deterministic, grounded).
+    if any(w in t for w in ["price", "quote", "trading at", "how much", "ltp"]):
         return "quote"
     if any(w in t for w in ["news", "headline", "latest", "happening", "story"]):
         return "news"
-    if any(w in t for w in ["buy", "sell", "recommend", "should i", "trade", "signal", "long", "short", "entry"]):
+    if any(w in t for w in ["buy", "sell", "recommend", "should i buy", "should i sell", "signal", "long", "short", "entry"]):
         return "recommend"
     if any(w in t for w in ["risk", "position size", "kelly", "stop loss", "stop-loss", "limit", "kill switch", "exposure"]):
         return "risk"
@@ -365,12 +387,70 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
             suggestions=["How does this affect my risk?", "What's my current exposure?"],
         )
 
-    # General fallback
+    # General / help / greet / unmatched: route to the conversational LLM, grounded
+    # in real desk state. Falls back to the canned reply when no model is available
+    # or the call fails, so this path is never worse than before.
+    canned = (
+        "I can pull live quotes, headlines, generate trade recommendations, and explain "
+        "the macro picture. Try: \"Quote RELIANCE\", \"News on INFY\", or \"Recommend a trade for HDFCBANK\"."
+    )
+    llm_reply = None
+    if desk_chat.llm_available():
+        facts = await _live_facts(db, symbol)
+        history = [{"role": m.role, "content": m.content} for m in (req.history or [])]
+        llm_reply = await desk_chat.desk_reply(msg, facts, history)
     return ChatResponse(
-        reply=(
-            "I can pull live quotes, headlines, generate trade recommendations, and explain "
-            "the macro picture. Try: \"Quote RELIANCE\", \"News on INFY\", or \"Recommend a trade for HDFCBANK\"."
-        ),
-        intent="general",
+        reply=llm_reply or canned,
+        intent="chat" if llm_reply else "general",
         suggestions=suggestions,
     )
+
+
+async def _live_facts(db: AsyncSession, symbol: Optional[str]) -> str:
+    """Render the platform's real current state into a compact fact block the LLM
+    is told to ground its answers in. Every value here is read live, never
+    invented; a source that fails is simply omitted."""
+    lines: List[str] = []
+
+    # Risk limits + today's usage
+    try:
+        lim = await risk_limits.get_limits(db)
+        lines.append(
+            f"Risk: realised P&L today ₹{lim.get('today_realized_pnl_inr', 0):,.0f}; "
+            f"daily loss cap ₹{lim.get('daily_max_loss_inr', 0):,.0f}; "
+            f"per-trade cap ₹{lim.get('per_trade_max_inr', 0):,.0f}; "
+            f"trades {lim.get('today_trade_count')}/{lim.get('daily_max_trades')}; "
+            f"kill switch {'ENGAGED' if lim.get('kill_switch') else 'off'}."
+        )
+    except Exception:
+        pass
+
+    # Macro regime
+    try:
+        point = await macro_data.latest_yield_curve()
+        vix = await macro_data.latest_value("VIXCLS")
+        spread = point.spread_10y_2y if point else None
+        regime = classify_macro_regime(spread, vix)
+        if spread is not None or vix is not None:
+            lines.append(
+                f"Macro: regime {(regime or 'calm').upper()}; "
+                f"10Y-2Y spread {spread:+.2f}% ({'inverted' if point and point.inverted else 'normal'}); "
+                f"VIX {vix if vix is not None else 'n/a'}."
+            )
+    except Exception:
+        pass
+
+    # Quote for the symbol in scope
+    if symbol:
+        try:
+            q = await market_data_service.get_quote(symbol)
+            lines.append(
+                f"{symbol}: {q['current_price']} {q['currency']} "
+                f"({'+' if q['change'] >= 0 else ''}{q['change_pct']}% today, source {q.get('source', '?')})."
+            )
+        except Exception:
+            pass
+
+    lines.append("Strategies available: rsi_sma, ema_cross, macd, bollinger, supertrend, "
+                 "breakout, volume_breakout, golden_cross, engulfing, pdh_pdl.")
+    return "\n".join(lines) if lines else "No live facts available right now."
