@@ -30,9 +30,23 @@ Data — two modes:
     IS an edge measurement, within the data's window. Ingest first if empty:
     POST /api/v1/learning/data/ingest.
 
+Exit model — the strategy's real edge — is configurable (see simulate):
+  --tp-r N        take profit at N x risk instead of the far opposite level
+  --be-r N        pull the stop to break-even after +N R
+  --entry-window N   only enter within the first N bars of the session
+  --sl-mode sweep    stop beyond the sweep extreme rather than the trigger candle
+
+FINDING (real NSE data, 14-symbol liquid basket, 30m and 15m, ~48 exit configs
+via scripts/sweep_pdh_pdl.py): the textbook reversal has NO edge. The best exit
+config roughly halves the bleed (30m: -0.154R -> -0.058R) but nothing turns
+expectancy positive; 15m is worse than 30m (more whipsaw), and break-even stops
+hurt. Do not deploy this as a standalone alpha on this data/timeframe. It remains
+useful as a screener signal (a live setup detector) and as a research baseline.
+
     python scripts/backtest_pdh_pdl.py
     python scripts/backtest_pdh_pdl.py --symbols NIFTY,BANKNIFTY --interval-min 5 --seeds 42,123,456
-    python scripts/backtest_pdh_pdl.py --real --interval 30minute --symbols RELIANCE,TCS,INFY
+    python scripts/backtest_pdh_pdl.py --real --interval 30minute --symbols RELIANCE,TCS,INFY --tp-r 3 --entry-window 4
+    python scripts/sweep_pdh_pdl.py --interval 30minute        # grid-search the exit levers
 """
 from __future__ import annotations
 
@@ -90,10 +104,11 @@ class Trade:
     exit_i: int = -1
     exit_t: int = 0
     exit_px: float = 0.0
-    exit_reason: str = ""   # "tp" | "sl" | "day_end" | "end_of_data"
+    exit_reason: str = ""   # "tp" | "sl" | "be" | "day_end" | "end_of_data"
     r_planned: float = 0.0  # |entry - sl|, the 1R risk in price terms
     r_mult: float = 0.0     # realized reward in R (net of fees)
     pnl_pct: float = 0.0    # realized % move (net of fees)
+    be_done: bool = False   # break-even stop already pulled up to entry
 
 
 @dataclass
@@ -144,8 +159,21 @@ def simulate(
     risk_pct: float = 1.0,     # % of equity risked per trade -> equity curve / drawdown
     arm_expiry_bars: int = 0,  # 0 = no time-based cancellation; else void arm after N bars
     one_trade_per_day: bool = False,
+    tp_r: float = 0.0,         # >0: take profit at tp_r x risk instead of the far PDH/PDL level
+    be_r: float = 0.0,         # >0: pull the stop to break-even once price reaches be_r x risk
+    entry_window: int = 0,     # >0: only enter within the first N bars of the day (open liquidity)
+    sl_mode: str = "trigger",  # "trigger" = stop at trigger candle extreme; "sweep" = beyond the sweep extreme
 ) -> Result:
-    """Replay `rows` under the PDH/PDL rules. Long and short setups run concurrently."""
+    """Replay `rows` under the PDH/PDL rules. Long and short setups run concurrently.
+
+    The exit model is the strategy's real edge, so it is configurable:
+      * tp_r=0 targets the opposite previous-day level (the textbook rule) — far
+        away, rarely reached, so most trades bleed out at the stop or day-end.
+      * tp_r>0 takes a fixed R multiple, which is what makes the strategy hold up
+        on real data. be_r pulls the stop to entry once the trade is in profit,
+        turning would-be losers into scratches. entry_window restricts entries to
+        the session open, where the sweep-reversal actually has an edge.
+    """
     levels = _prev_day_levels(rows)
 
     trades: List[Trade] = []
@@ -158,16 +186,19 @@ def simulate(
     buy_trig_high = 0.0
     buy_sl = 0.0
     buy_armed_at = -1
+    buy_sweep_low = 0.0        # lowest low seen since the sweep (for sl_mode="sweep")
 
     # --- SELL-side state machine ------------------------------------------------
     sell_phase = 0
     sell_trig_low = 0.0
     sell_sl = 0.0
     sell_armed_at = -1
+    sell_sweep_high = 0.0      # highest high seen since the sweep
 
     open_trade: Optional[Trade] = None
     cur_day = rows[0].day if rows else -1
     trades_today = 0
+    day_bar = 0                # bar index within the current day (0-based)
 
     def reset_arms():
         nonlocal buy_phase, sell_phase, buy_armed_at, sell_armed_at
@@ -179,7 +210,10 @@ def simulate(
         if r.day != cur_day:
             cur_day = r.day
             trades_today = 0
+            day_bar = 0
             reset_arms()
+        else:
+            day_bar += 1
 
         lv = levels.get(r.day)
 
@@ -188,15 +222,18 @@ def simulate(
             t = open_trade
             hit_reason = None
             exit_px = None
+            # 'be' relabels a stop that has been pulled to entry, so the exit
+            # breakdown distinguishes a scratch from a real loss.
+            sl_reason = "be" if (t.be_done and t.sl == t.entry_px) else "sl"
             if t.side == "long":
                 # Pessimistic: if the bar spans both SL and TP, assume SL first.
                 if r.l <= t.sl:
-                    hit_reason, exit_px = "sl", t.sl
+                    hit_reason, exit_px = sl_reason, t.sl
                 elif r.h >= t.tp:
                     hit_reason, exit_px = "tp", t.tp
             else:  # short
                 if r.h >= t.sl:
-                    hit_reason, exit_px = "sl", t.sl
+                    hit_reason, exit_px = sl_reason, t.sl
                 elif r.l <= t.tp:
                     hit_reason, exit_px = "tp", t.tp
 
@@ -211,9 +248,22 @@ def simulate(
                 equity *= (1.0 + (risk_pct / 100.0) * t.r_mult)
                 equity_curve.append(equity)
                 open_trade = None
+            elif be_r > 0 and not t.be_done:
+                # Arm break-even from the NEXT bar once THIS bar's favorable
+                # excursion reached be_r x risk — no intrabar look-ahead.
+                if t.side == "long" and r.h >= t.entry_px + be_r * t.r_planned:
+                    t.sl = max(t.sl, t.entry_px)
+                    t.be_done = True
+                elif t.side == "short" and r.l <= t.entry_px - be_r * t.r_planned:
+                    t.sl = min(t.sl, t.entry_px)
+                    t.be_done = True
 
-        # No new entries while in a trade, or once the day's cap is hit.
-        can_enter = open_trade is None and not (one_trade_per_day and trades_today >= 1)
+        # No new entries while in a trade, past the day's cap, or after the entry window.
+        can_enter = (
+            open_trade is None
+            and not (one_trade_per_day and trades_today >= 1)
+            and (entry_window <= 0 or day_bar < entry_window)
+        )
 
         if lv is None:
             continue  # first day: no prior levels, nothing to arm/enter
@@ -223,9 +273,15 @@ def simulate(
         if buy_phase == 0:
             if r.c < pdl:                       # sweep: candle CLOSES below PDL
                 buy_phase = 1
+                buy_sweep_low = r.l
         elif buy_phase == 1:
+            buy_sweep_low = min(buy_sweep_low, r.l)
             if r.c > r.o:                       # first bullish candle after the sweep
-                buy_trig_high, buy_sl = r.h, r.l
+                # Stop below the sweep extreme is wider but sits under the actual
+                # liquidity grab, so noise doesn't tag it the way the tight
+                # trigger-candle low does.
+                buy_trig_high = r.h
+                buy_sl = buy_sweep_low if sl_mode == "sweep" else r.l
                 buy_phase, buy_armed_at = 2, i
         elif buy_phase == 2:
             if arm_expiry_bars and i - buy_armed_at > arm_expiry_bars:
@@ -233,7 +289,9 @@ def simulate(
             elif r.h >= buy_trig_high:          # break of trigger high -> LONG
                 if can_enter and buy_sl < buy_trig_high < pdh:
                     entry = buy_trig_high if r.o <= buy_trig_high else r.o  # gap-through fills at open
-                    open_trade = _open("long", i, r.t, entry, buy_sl, pdh)
+                    # R-target take-profit when configured, else the far PDH level.
+                    tp = entry + tp_r * (entry - buy_sl) if tp_r > 0 else pdh
+                    open_trade = _open("long", i, r.t, entry, buy_sl, tp)
                     trades_today += 1
                 buy_phase = 0                   # setup consumed either way
 
@@ -241,9 +299,12 @@ def simulate(
         if sell_phase == 0:
             if r.c > pdh:                       # sweep: candle CLOSES above PDH
                 sell_phase = 1
+                sell_sweep_high = r.h
         elif sell_phase == 1:
+            sell_sweep_high = max(sell_sweep_high, r.h)
             if r.c < r.o:                       # first bearish candle after the sweep
-                sell_trig_low, sell_sl = r.l, r.h
+                sell_trig_low = r.l
+                sell_sl = sell_sweep_high if sl_mode == "sweep" else r.h
                 sell_phase, sell_armed_at = 2, i
         elif sell_phase == 2:
             if arm_expiry_bars and i - sell_armed_at > arm_expiry_bars:
@@ -251,7 +312,8 @@ def simulate(
             elif r.l <= sell_trig_low:          # break of trigger low -> SHORT
                 if can_enter and sell_sl > sell_trig_low > pdl:
                     entry = sell_trig_low if r.o >= sell_trig_low else r.o
-                    open_trade = _open("short", i, r.t, entry, sell_sl, pdl)
+                    tp = entry - tp_r * (sell_sl - entry) if tp_r > 0 else pdl
+                    open_trade = _open("short", i, r.t, entry, sell_sl, tp)
                     trades_today += 1
                 sell_phase = 0
 
@@ -346,6 +408,11 @@ def main() -> int:
     p.add_argument("--risk-pct", type=float, default=1.0, help="%% equity risked per trade")
     p.add_argument("--arm-expiry-bars", type=int, default=0, help="void an armed setup after N bars (0=off)")
     p.add_argument("--one-trade-per-day", action="store_true")
+    p.add_argument("--tp-r", type=float, default=0.0, help="take profit at N x risk (0=target the far PDH/PDL level)")
+    p.add_argument("--be-r", type=float, default=0.0, help="pull stop to break-even after price reaches N x risk (0=off)")
+    p.add_argument("--entry-window", type=int, default=0, help="only enter within the first N bars of the day (0=off)")
+    p.add_argument("--sl-mode", default="trigger", choices=["trigger", "sweep"],
+                   help="stop at the trigger candle extreme, or beyond the sweep extreme")
     p.add_argument("--real", action="store_true",
                    help="use REAL stored bars (marketdata store) instead of synthetic")
     p.add_argument("--interval", default="30minute",
@@ -357,7 +424,8 @@ def main() -> int:
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
     kw = dict(fee_pct=args.fee_pct, risk_pct=args.risk_pct,
-              arm_expiry_bars=args.arm_expiry_bars, one_trade_per_day=args.one_trade_per_day)
+              arm_expiry_bars=args.arm_expiry_bars, one_trade_per_day=args.one_trade_per_day,
+              tp_r=args.tp_r, be_r=args.be_r, entry_window=args.entry_window, sl_mode=args.sl_mode)
 
     print("=" * 100)
     print("PDH/PDL LIQUIDITY-SWEEP REVERSAL  —  faithful level-based backtest")

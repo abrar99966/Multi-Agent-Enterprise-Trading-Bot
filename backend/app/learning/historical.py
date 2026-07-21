@@ -34,6 +34,8 @@ _MIN_STORED_BARS = 20
 # Map our generic interval string to Upstox's literal vocabulary.
 _UPSTOX_INTERVAL = {
     "1m": "1minute", "1minute": "1minute",
+    "5m": "5minute", "5minute": "5minute",
+    "15m": "15minute", "15minute": "15minute",
     "30m": "30minute", "30minute": "30minute",
     "1d": "day", "day": "day",
     "1w": "week", "week": "week",
