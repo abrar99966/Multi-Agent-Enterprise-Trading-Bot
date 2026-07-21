@@ -71,46 +71,55 @@ def main() -> int:
             print(f"skip {s}: {exc}")
     print(f"loaded {len(bars_by_sym)} symbols @ {args.interval}\n")
 
-    # The grid. tp_r=0 is the textbook far-level target (the baseline that failed).
+    # The grid. invert=False is the reversal (fade the sweep); invert=True is the
+    # continuation (trade with the break) — the hypothesis under test here.
     grid = list(itertools.product(
-        ["trigger", "sweep"],        # sl_mode
+        [False, True],               # invert (reversal vs continuation)
+        ["trigger", "sweep"],        # sl_mode (reversal only; ignored when invert)
         [0.0, 1.5, 2.0, 3.0],        # tp_r
-        [0.0, 1.0],                  # be_r  (0=off, 1=stop to entry after +1R)
-        [0, 4, 8],                   # entry_window (bars from open; 30m NSE ~ 13 bars/day)
+        [0.0, 1.0],                  # be_r
+        [0, 4, 8],                   # entry_window
     ))
 
     rows_out = []
-    for slm, tp_r, be_r, win in grid:
+    for inv, slm, tp_r, be_r, win in grid:
+        if inv and slm == "sweep":
+            continue  # sl_mode does not apply to the continuation machine
         results = [
             simulate(rows, sym, seed=-1, tp_r=tp_r, be_r=be_r,
-                     entry_window=win, sl_mode=slm)
+                     entry_window=win, sl_mode=slm, invert=inv)
             for sym, rows in bars_by_sym.items()
         ]
         p = pooled(results)
         if p is None or p["trades"] < args.min_trades:
             continue
-        rows_out.append((slm, tp_r, be_r, win, p))
+        rows_out.append((inv, slm, tp_r, be_r, win, p))
 
     # Rank by expectancy, then PF.
-    rows_out.sort(key=lambda x: (x[4]["exp"], x[4]["pf"]), reverse=True)
+    rows_out.sort(key=lambda x: (x[5]["exp"], x[5]["pf"]), reverse=True)
 
-    hdr = f"{'sl':>8}{'tp_r':>5}{'be_r':>5}{'win':>4}{'trades':>7}{'win%':>7}{'PF':>7}{'exp(R)':>8}{'avgRet%':>8}{'maxDD%':>7}"
+    hdr = f"{'mode':>6}{'sl':>8}{'tp_r':>5}{'be_r':>5}{'win':>4}{'trades':>7}{'win%':>7}{'PF':>7}{'exp(R)':>8}{'avgRet%':>8}{'maxDD%':>7}"
     print(hdr)
     print("-" * len(hdr))
-    for slm, tp_r, be_r, win, p in rows_out[:args.top]:
+    for inv, slm, tp_r, be_r, win, p in rows_out[:args.top]:
         pf = "inf" if p["pf"] == float("inf") else f"{p['pf']:.2f}"
-        print(f"{slm:>8}{tp_r:>5.1f}{be_r:>5.1f}{win:>4}"
+        mode = "cont" if inv else "rev"
+        print(f"{mode:>6}{slm:>8}{tp_r:>5.1f}{be_r:>5.1f}{win:>4}"
               f"{p['trades']:>7}{p['win']:>6.1f}%{pf:>7}{p['exp']:>+8.3f}{p['ret']:>+8.1f}{p['dd']:>7.1f}")
 
     print("-" * len(hdr))
     if rows_out:
-        best = rows_out[0]
-        print(f"\nBEST: sl_mode={best[0]} tp_r={best[1]} be_r={best[2]} entry_window={best[3]}")
-        print(f"  exits {best[4]['exits']}")
-    baseline = [r for r in rows_out if r[0] == "trigger" and r[1] == 0.0 and r[2] == 0.0 and r[3] == 0]
-    if baseline:
-        b = baseline[0][4]
-        print(f"  baseline (textbook, no levers): exp={b['exp']:+.3f}R  PF={b['pf']:.2f}  win={b['win']:.1f}%")
+        b = rows_out[0]
+        print(f"\nBEST: mode={'continuation' if b[0] else 'reversal'} sl_mode={b[1]} "
+              f"tp_r={b[2]} be_r={b[3]} entry_window={b[4]}")
+        print(f"  exits {b[5]['exits']}")
+    # Best of each mode for a clean head-to-head.
+    for inv, name in ((False, "reversal"), (True, "continuation")):
+        best = next((r for r in rows_out if r[0] == inv), None)
+        if best:
+            p = best[5]
+            print(f"  best {name:<13}: exp={p['exp']:+.3f}R  PF={p['pf']:.2f}  win={p['win']:.1f}%  "
+                  f"(tp_r={best[2]}, entry_window={best[4]})")
     return 0
 
 

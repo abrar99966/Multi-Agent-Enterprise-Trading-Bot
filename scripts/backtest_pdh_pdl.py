@@ -36,12 +36,19 @@ Exit model — the strategy's real edge — is configurable (see simulate):
   --entry-window N   only enter within the first N bars of the session
   --sl-mode sweep    stop beyond the sweep extreme rather than the trigger candle
 
-FINDING (real NSE data, 14-symbol liquid basket, 30m and 15m, ~48 exit configs
-via scripts/sweep_pdh_pdl.py): the textbook reversal has NO edge. The best exit
-config roughly halves the bleed (30m: -0.154R -> -0.058R) but nothing turns
-expectancy positive; 15m is worse than 30m (more whipsaw), and break-even stops
-hurt. Do not deploy this as a standalone alpha on this data/timeframe. It remains
-useful as a screener signal (a live setup detector) and as a research baseline.
+FINDING (real NSE data, 14-symbol liquid basket, 30m + 15m, ~90 configs across
+both directions via scripts/sweep_pdh_pdl.py): the PDH/PDL level break has NO
+tradeable edge, faded OR followed, on either timeframe, net of costs:
+
+    mode           30m best      15m best
+    reversal       -0.099R       -0.119R
+    continuation   -0.122R       -0.183R    (--invert)
+
+The best exit levers halve the bleed but nothing turns positive; continuation is
+worse than reversal; 15m is worse than 30m; break-even stops hurt. The market
+prices these breaks efficiently enough on this basket/window that neither
+direction beats transaction costs. Do NOT deploy as standalone alpha. It remains
+useful as a screener signal (a live setup detector) and a research baseline.
 
     python scripts/backtest_pdh_pdl.py
     python scripts/backtest_pdh_pdl.py --symbols NIFTY,BANKNIFTY --interval-min 5 --seeds 42,123,456
@@ -163,6 +170,7 @@ def simulate(
     be_r: float = 0.0,         # >0: pull the stop to break-even once price reaches be_r x risk
     entry_window: int = 0,     # >0: only enter within the first N bars of the day (open liquidity)
     sl_mode: str = "trigger",  # "trigger" = stop at trigger candle extreme; "sweep" = beyond the sweep extreme
+    invert: bool = False,      # True = CONTINUATION (trade WITH the break) instead of reversal
 ) -> Result:
     """Replay `rows` under the PDH/PDL rules. Long and short setups run concurrently.
 
@@ -269,53 +277,95 @@ def simulate(
             continue  # first day: no prior levels, nothing to arm/enter
         pdh, pdl = lv
 
-        # ---- BUY state machine ---------------------------------------------------
-        if buy_phase == 0:
-            if r.c < pdl:                       # sweep: candle CLOSES below PDL
-                buy_phase = 1
-                buy_sweep_low = r.l
-        elif buy_phase == 1:
-            buy_sweep_low = min(buy_sweep_low, r.l)
-            if r.c > r.o:                       # first bullish candle after the sweep
-                # Stop below the sweep extreme is wider but sits under the actual
-                # liquidity grab, so noise doesn't tag it the way the tight
-                # trigger-candle low does.
-                buy_trig_high = r.h
-                buy_sl = buy_sweep_low if sl_mode == "sweep" else r.l
-                buy_phase, buy_armed_at = 2, i
-        elif buy_phase == 2:
-            if arm_expiry_bars and i - buy_armed_at > arm_expiry_bars:
-                buy_phase = 0                   # time-based cancellation
-            elif r.h >= buy_trig_high:          # break of trigger high -> LONG
-                if can_enter and buy_sl < buy_trig_high < pdh:
-                    entry = buy_trig_high if r.o <= buy_trig_high else r.o  # gap-through fills at open
-                    # R-target take-profit when configured, else the far PDH level.
-                    tp = entry + tp_r * (entry - buy_sl) if tp_r > 0 else pdh
-                    open_trade = _open("long", i, r.t, entry, buy_sl, tp)
-                    trades_today += 1
-                buy_phase = 0                   # setup consumed either way
+        if not invert:
+            # ================= REVERSAL: fade the sweep =========================
+            # ---- BUY state machine (sweep below PDL -> LONG) -------------------
+            if buy_phase == 0:
+                if r.c < pdl:                       # sweep: candle CLOSES below PDL
+                    buy_phase = 1
+                    buy_sweep_low = r.l
+            elif buy_phase == 1:
+                buy_sweep_low = min(buy_sweep_low, r.l)
+                if r.c > r.o:                       # first bullish candle after the sweep
+                    # Stop below the sweep extreme is wider but sits under the actual
+                    # liquidity grab, so noise doesn't tag it the way the tight
+                    # trigger-candle low does.
+                    buy_trig_high = r.h
+                    buy_sl = buy_sweep_low if sl_mode == "sweep" else r.l
+                    buy_phase, buy_armed_at = 2, i
+            elif buy_phase == 2:
+                if arm_expiry_bars and i - buy_armed_at > arm_expiry_bars:
+                    buy_phase = 0                   # time-based cancellation
+                elif r.h >= buy_trig_high:          # break of trigger high -> LONG
+                    if can_enter and buy_sl < buy_trig_high < pdh:
+                        entry = buy_trig_high if r.o <= buy_trig_high else r.o  # gap-through fills at open
+                        # R-target take-profit when configured, else the far PDH level.
+                        tp = entry + tp_r * (entry - buy_sl) if tp_r > 0 else pdh
+                        open_trade = _open("long", i, r.t, entry, buy_sl, tp)
+                        trades_today += 1
+                    buy_phase = 0                   # setup consumed either way
 
-        # ---- SELL state machine --------------------------------------------------
-        if sell_phase == 0:
-            if r.c > pdh:                       # sweep: candle CLOSES above PDH
-                sell_phase = 1
-                sell_sweep_high = r.h
-        elif sell_phase == 1:
-            sell_sweep_high = max(sell_sweep_high, r.h)
-            if r.c < r.o:                       # first bearish candle after the sweep
-                sell_trig_low = r.l
-                sell_sl = sell_sweep_high if sl_mode == "sweep" else r.h
-                sell_phase, sell_armed_at = 2, i
-        elif sell_phase == 2:
-            if arm_expiry_bars and i - sell_armed_at > arm_expiry_bars:
-                sell_phase = 0
-            elif r.l <= sell_trig_low:          # break of trigger low -> SHORT
-                if can_enter and sell_sl > sell_trig_low > pdl:
-                    entry = sell_trig_low if r.o >= sell_trig_low else r.o
-                    tp = entry - tp_r * (sell_sl - entry) if tp_r > 0 else pdl
-                    open_trade = _open("short", i, r.t, entry, sell_sl, tp)
-                    trades_today += 1
-                sell_phase = 0
+            # ---- SELL state machine (sweep above PDH -> SHORT) ----------------
+            if sell_phase == 0:
+                if r.c > pdh:                       # sweep: candle CLOSES above PDH
+                    sell_phase = 1
+                    sell_sweep_high = r.h
+            elif sell_phase == 1:
+                sell_sweep_high = max(sell_sweep_high, r.h)
+                if r.c < r.o:                       # first bearish candle after the sweep
+                    sell_trig_low = r.l
+                    sell_sl = sell_sweep_high if sl_mode == "sweep" else r.h
+                    sell_phase, sell_armed_at = 2, i
+            elif sell_phase == 2:
+                if arm_expiry_bars and i - sell_armed_at > arm_expiry_bars:
+                    sell_phase = 0
+                elif r.l <= sell_trig_low:          # break of trigger low -> SHORT
+                    if can_enter and sell_sl > sell_trig_low > pdl:
+                        entry = sell_trig_low if r.o >= sell_trig_low else r.o
+                        tp = entry - tp_r * (sell_sl - entry) if tp_r > 0 else pdl
+                        open_trade = _open("short", i, r.t, entry, sell_sl, tp)
+                        trades_today += 1
+                    sell_phase = 0
+        else:
+            # ================= CONTINUATION: trade WITH the break ===============
+            # The sweep bar IS the trigger — no opposing-candle wait. Enter in the
+            # break direction when a later bar takes out the sweep bar's extreme;
+            # stop at the sweep bar's opposite extreme. There is no prior-day level
+            # AHEAD of a continuation, so the target is always an R multiple
+            # (defaults to 2R when tp_r is unset).
+            ctp_r = tp_r if tp_r > 0 else 2.0
+
+            # PDH breakout -> LONG continuation (buy_phase repurposed)
+            if buy_phase == 0:
+                if r.c > pdh:                       # breakout close above PDH
+                    buy_trig_high, buy_sl = r.h, r.l
+                    buy_phase, buy_armed_at = 1, i
+            elif buy_phase == 1:
+                if arm_expiry_bars and i - buy_armed_at > arm_expiry_bars:
+                    buy_phase = 0
+                elif r.h >= buy_trig_high:          # continuation break up -> LONG
+                    if can_enter and buy_sl < buy_trig_high:
+                        entry = buy_trig_high if r.o <= buy_trig_high else r.o
+                        tp = entry + ctp_r * (entry - buy_sl)
+                        open_trade = _open("long", i, r.t, entry, buy_sl, tp)
+                        trades_today += 1
+                    buy_phase = 0
+
+            # PDL breakdown -> SHORT continuation (sell_phase repurposed)
+            if sell_phase == 0:
+                if r.c < pdl:                       # breakdown close below PDL
+                    sell_trig_low, sell_sl = r.l, r.h
+                    sell_phase, sell_armed_at = 1, i
+            elif sell_phase == 1:
+                if arm_expiry_bars and i - sell_armed_at > arm_expiry_bars:
+                    sell_phase = 0
+                elif r.l <= sell_trig_low:          # continuation break down -> SHORT
+                    if can_enter and sell_sl > sell_trig_low:
+                        entry = sell_trig_low if r.o >= sell_trig_low else r.o
+                        tp = entry - ctp_r * (sell_sl - entry)
+                        open_trade = _open("short", i, r.t, entry, sell_sl, tp)
+                        trades_today += 1
+                    sell_phase = 0
 
     return _metrics(symbol, seed, rows, trades, equity_curve)
 
@@ -413,6 +463,8 @@ def main() -> int:
     p.add_argument("--entry-window", type=int, default=0, help="only enter within the first N bars of the day (0=off)")
     p.add_argument("--sl-mode", default="trigger", choices=["trigger", "sweep"],
                    help="stop at the trigger candle extreme, or beyond the sweep extreme")
+    p.add_argument("--invert", action="store_true",
+                   help="CONTINUATION: trade WITH the level break instead of fading it")
     p.add_argument("--real", action="store_true",
                    help="use REAL stored bars (marketdata store) instead of synthetic")
     p.add_argument("--interval", default="30minute",
@@ -425,7 +477,8 @@ def main() -> int:
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
     kw = dict(fee_pct=args.fee_pct, risk_pct=args.risk_pct,
               arm_expiry_bars=args.arm_expiry_bars, one_trade_per_day=args.one_trade_per_day,
-              tp_r=args.tp_r, be_r=args.be_r, entry_window=args.entry_window, sl_mode=args.sl_mode)
+              tp_r=args.tp_r, be_r=args.be_r, entry_window=args.entry_window, sl_mode=args.sl_mode,
+              invert=args.invert)
 
     print("=" * 100)
     print("PDH/PDL LIQUIDITY-SWEEP REVERSAL  —  faithful level-based backtest")
