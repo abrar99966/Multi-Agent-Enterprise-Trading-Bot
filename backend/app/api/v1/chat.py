@@ -5,12 +5,17 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import get_db
+from app.services import risk_limits
+from app.services.macro_data import macro_data
 from app.services.market_data import market_data_service, NSE_HINTS, INDEX_ALIAS
 from app.services.news_service import news_service
 from app.services.ai_service import ai_service
+from app.slowpath.macro_regime import classify_macro_regime
 
 router = APIRouter()
 
@@ -55,15 +60,27 @@ def _extract_symbol(text: str) -> Optional[str]:
 
 def _classify(text: str) -> str:
     t = text.lower()
+    # Specific intents first — these phrases also contain generic keywords
+    # ("trade", "strategy") that would otherwise mis-route to recommend/general.
+    if ("reject" in t or "declined" in t or "blocked" in t) and any(
+        w in t for w in ["trade", "order", "why", "rejected"]
+    ):
+        return "why_reject"
+    if any(w in t for w in ["optimize", "optimise", "tune", "improve my strategy", "best strategy"]):
+        return "optimize"
+    if "backtest" in t or "back-test" in t or "back test" in t:
+        return "backtest"
+    if "drawdown" in t or "under water" in t or "underwater" in t:
+        return "risk"
     if any(w in t for w in ["price", "quote", "trading at", "how much", "level", "current"]):
         return "quote"
     if any(w in t for w in ["news", "headline", "latest", "happening", "story"]):
         return "news"
     if any(w in t for w in ["buy", "sell", "recommend", "should i", "trade", "signal", "long", "short", "entry"]):
         return "recommend"
-    if any(w in t for w in ["risk", "position size", "kelly", "stop loss", "stop-loss", "drawdown"]):
+    if any(w in t for w in ["risk", "position size", "kelly", "stop loss", "stop-loss", "limit", "kill switch", "exposure"]):
         return "risk"
-    if any(w in t for w in ["macro", "fed", "rbi", "inflation", "rates", "gdp"]):
+    if any(w in t for w in ["macro", "fed", "rbi", "inflation", "rates", "gdp", "regime", "vix", "yield"]):
         return "macro"
     if any(w in t for w in ["hello", "hi ", "hey", "good morning", "good evening"]):
         return "greet"
@@ -85,7 +102,7 @@ def _fmt_price(q: dict) -> str:
 
 
 @router.post("/", response_model=ChatResponse)
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
     msg = req.message.strip()
     if not msg:
         raise HTTPException(status_code=400, detail="Empty message")
@@ -239,26 +256,113 @@ async def chat(req: ChatRequest):
         except Exception as exc:
             return ChatResponse(reply=f"Analysis failed: {exc}", intent="error")
 
-    if intent == "risk":
+    if intent == "why_reject":
+        # We have no order id here, so explain the boundary honestly and point at
+        # where the actual verdict lives, rather than inventing a reason.
+        lim = await risk_limits.get_limits(db)
+        gates = []
+        if lim.get("kill_switch"):
+            gates.append("the kill switch is currently ENGAGED (all orders blocked)")
+        if lim.get("today_remaining_trades", 1) <= 0:
+            gates.append(f"today's trade budget is spent ({lim.get('today_trade_count')}/{lim.get('daily_max_trades')})")
+        buf = lim.get("today_remaining_loss_buffer_inr")
+        if buf is not None and buf <= 0:
+            gates.append("the daily loss cap has been hit")
+        active = (" Right now: " + "; ".join(gates) + ".") if gates else ""
         return ChatResponse(
             reply=(
-                "Risk discipline: max 2% capital risk per trade, Kelly fraction capped at 20%, "
-                "daily-loss circuit breaker, and stop-loss enforced on every position. "
-                "Want me to size a specific trade?"
+                "Every order passes the risk gateway before a broker sees it. A rejection "
+                "means one pre-trade check failed: per-trade notional cap "
+                f"(₹{lim.get('per_trade_max_inr'):,.0f}), daily loss cap "
+                f"(₹{lim.get('daily_max_loss_inr'):,.0f}), daily trade count "
+                f"({lim.get('daily_max_trades')}), or the kill switch."
+                f"{active} Open the specific order in the Orders module to see its exact "
+                "verdict and which check failed."
+            ),
+            intent="why_reject",
+            data={"limits": lim},
+            suggestions=["Show my risk limits", "What's the kill switch state?"],
+        )
+
+    if intent == "optimize":
+        return ChatResponse(
+            reply=(
+                "Strategy optimisation runs as a walk-forward tournament, not a chat action. "
+                "Open the Learning module and start a training run over a symbol universe: it "
+                "grid-searches each strategy's parameters with purged cross-validation and picks "
+                "the champion per symbol. The Strategies module then lists the arms and their "
+                "grid sizes. For the level-based PDH/PDL strategy, use scripts/backtest_pdh_pdl.py "
+                "— its exits are previous-day levels the tournament's global stop can't model."
+            ),
+            intent="optimize",
+            suggestions=["List my strategies", "Start a training run"],
+        )
+
+    if intent == "backtest":
+        return ChatResponse(
+            reply=(
+                "Backtests run over stored bars, not from chat. Two paths: the tournament backtest "
+                "(Learning module → train) grades every strategy per symbol with no look-ahead; and "
+                "for a faithful path-dependent run of the PDH/PDL sweep-reversal, "
+                "scripts/backtest_pdh_pdl.py --real replays real stored bars with level-based "
+                "entries and intrabar SL/TP. Tell me a symbol and I can generate a fresh "
+                "recommendation instead."
+            ),
+            intent="backtest",
+            suggestions=["Recommend a trade for RELIANCE", "List my strategies"],
+        )
+
+    if intent == "risk":
+        lim = await risk_limits.get_limits(db)
+        pnl = lim.get("today_realized_pnl_inr", 0.0) or 0.0
+        loss_cap = lim.get("daily_max_loss_inr", 0.0) or 0.0
+        buf = lim.get("today_remaining_loss_buffer_inr")
+        used_pct = (max(0.0, -pnl) / loss_cap * 100) if loss_cap else 0.0
+        state = "ENGAGED — orders halted" if lim.get("kill_switch") else "off"
+        return ChatResponse(
+            reply=(
+                f"Live risk state: realised P&L today ₹{pnl:,.0f}; daily loss cap "
+                f"₹{loss_cap:,.0f} ({used_pct:.0f}% consumed"
+                + (f", ₹{buf:,.0f} buffer left" if buf is not None else "")
+                + f"). Per-trade cap ₹{lim.get('per_trade_max_inr'):,.0f}; trades today "
+                f"{lim.get('today_trade_count')}/{lim.get('daily_max_trades')}. Kill switch: {state}. "
+                "Every order is gated pre-trade; these caps are hard limits, not guidance."
             ),
             intent="risk",
-            suggestions=["Size a long on INFY", "Show portfolio drawdown"],
+            data={"limits": lim},
+            suggestions=["Why was my order rejected?", "What's the macro picture?"],
         )
 
     if intent == "macro":
+        # Real macro read from the same adapter the regime analyst uses — no
+        # fabricated inflation/GDP figures.
+        try:
+            point = await macro_data.latest_yield_curve()
+            vix = await macro_data.latest_value("VIXCLS")  # None without a FRED key
+        except Exception:
+            point, vix = None, None
+        spread = point.spread_10y_2y if point else None
+        regime = classify_macro_regime(spread, vix)
+        if point is None and vix is None:
+            reply = ("Macro data is unavailable right now (the US Treasury feed did not respond "
+                     "and no FRED key is set for VIX).")
+        else:
+            bits = []
+            if spread is not None:
+                bits.append(f"US 10Y-2Y spread {spread:+.2f}%"
+                            + (" (inverted — a stress precursor)" if point and point.inverted else ""))
+            if vix is not None:
+                bits.append(f"VIX {vix:.1f}")
+            label = (regime or "calm").upper()
+            reply = (f"Macro regime: {label}. " + "; ".join(bits) + ". "
+                     "This is a tighten-only signal — on stress it cuts gross exposure, it never "
+                     "loosens limits. (US Treasury needs no key; VIX requires a FRED key.)")
         return ChatResponse(
-            reply=(
-                "Current macro read â€” Inflation 4.2%, policy rate 6.5%, GDP +7.1%. "
-                "Regime: expansionary, stable rates favor growth and quality compounders. "
-                "Watching: oil, USD/INR, and Fed dot plot."
-            ),
+            reply=reply,
             intent="macro",
-            suggestions=["How does this affect banks?", "Best sectors right now?"],
+            data={"macro": {"spread_10y_2y": spread, "vix": vix, "regime": regime,
+                            "inverted": bool(point and point.inverted)}},
+            suggestions=["How does this affect my risk?", "What's my current exposure?"],
         )
 
     # General fallback
